@@ -178,21 +178,21 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 
 fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
-	// if !path.exists() {
-	// 	println!(">>> NO SERVICE RUNNING (start one?)");
-	// 	return Ok(());
-	// }
+	if !path.exists() {
+		println!(">>> NO SERVICE RUNNING (start one?)");
+		return Ok(());
+	}
+
+	let mut stream = UnixStream::connect(path)?;
+	let mut buf = String::new();
+	stream.read_to_string(&mut buf)?;
+	println!(">>> {}", buf);
 
 	let mut data = String::new();
 	io::stdin().read_to_string(&mut data)?;
 	let data: serde_json::Value = serde_json::from_str(&data)?;
 	println!(">>> STORE: {}", data);
 	
-	let mut stream = UnixStream::connect(path)?;
-	let mut buf = String::new();
-	stream.read_to_string(&mut buf)?;
-	println!(">>> {}", buf);
-
 	Ok(())
 }
 
