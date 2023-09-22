@@ -154,10 +154,24 @@ fn run_client(mut stream: UnixStream) {
 		Ok(_) 	 => {},
 		Err(err) => eprintln!("{}", &format!("* * * {}", err).yellow().bold()),
 	};
+	println!("Client ended.");
 }
 
 fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
-	stream.write_all(b"Hello world.\n")?;
+	let mut writer = stream.try_clone()?;
+	let mut reader = io::BufReader::new(stream);
+	let mut line = String::new();
+	loop {
+		if reader.read_line(&mut line)? == 0 {
+			break; // end of input
+		}
+		match line.trim().to_lowercase().as_ref() {
+			"hi" => writer.write_all(b"Hello world.\n")?,
+				_  => break,
+		};
+		writer.flush()?;
+		line.clear();
+	}
 	Ok(())
 }
 
@@ -169,8 +183,14 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	}
 
 	let mut stream = UnixStream::connect(path)?;
+	let mut writer = stream.try_clone()?;
+	let mut reader = io::BufReader::new(stream);
+
+	writer.write_all(b"hi\n")?;
+	writer.flush()?;
+
 	let mut buf = String::new();
-	stream.read_to_string(&mut buf)?;
+	reader.read_line(&mut buf)?;
 	println!(">>> {}", buf);
 
 	Ok(())
