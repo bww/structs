@@ -40,6 +40,8 @@ enum Command {
   Run(RunOptions),
   #[clap(name="get", about="Query a value from the service")]
   Fetch(FetchOptions),
+  #[clap(name="set", about="Store a value in the service")]
+  Store(StoreOptions),
 }
 
 #[derive(Args, Debug)]
@@ -52,8 +54,16 @@ struct RunOptions {
 struct FetchOptions {
   #[clap(long="socket", name="socket", help="The path to the server socket")]
   path: Option<String>,
-  #[clap(help="The key to store the record under")]
+  #[clap(help="The key to fetch the record from")]
   key: String,
+}
+
+#[derive(Args, Debug)]
+struct StoreOptions {
+  #[clap(long="socket", name="socket", help="The path to the server socket")]
+  path: Option<String>,
+  #[clap(help="The key to store the record under")]
+  key: Option<String>,
 }
 
 #[derive(Clone)]
@@ -102,6 +112,7 @@ fn cmd() -> Result<(), error::Error> {
   match &opts.command {
 		Command::Run(sub)   => cmd_run(&opts, sub),
     Command::Fetch(sub) => cmd_get(&opts, sub),
+    Command::Store(sub) => cmd_set(&opts, sub),
   }?;
 
   Ok(())
@@ -152,10 +163,36 @@ fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
 
 fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
+	if !path.exists() {
+		println!(">>> NO SERVICE RUNNING (start one?)");
+		return Ok(());
+	}
+
 	let mut stream = UnixStream::connect(path)?;
 	let mut buf = String::new();
 	stream.read_to_string(&mut buf)?;
 	println!(">>> {}", buf);
+
+	Ok(())
+}
+
+fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
+	let path = socket_path(&sub.path);
+	// if !path.exists() {
+	// 	println!(">>> NO SERVICE RUNNING (start one?)");
+	// 	return Ok(());
+	// }
+
+	let mut data = String::new();
+	io::stdin().read_to_string(&mut data)?;
+	let data: serde_json::Value = serde_json::from_str(&data)?;
+	println!(">>> STORE: {}", data);
+	
+	let mut stream = UnixStream::connect(path)?;
+	let mut buf = String::new();
+	stream.read_to_string(&mut buf)?;
+	println!(">>> {}", buf);
+
 	Ok(())
 }
 
