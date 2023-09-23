@@ -66,6 +66,37 @@ struct StoreOptions {
   key: Option<String>,
 }
 
+struct RPC {
+	reader: io::BufReader<UnixStream>,
+	writer: UnixStream,
+}
+
+impl RPC {
+	pub fn new(mut stream: UnixStream) -> Result<Self, error::Error> {
+		let mut writer = stream.try_clone()?;
+		let mut reader = io::BufReader::new(stream);
+		Ok(Self{
+			reader: reader,
+			writer: writer,
+		})
+	}
+
+	pub fn read_cmd(&mut self) -> Result<Option<String>, error::Error> {
+		let mut line = String::new();
+		match self.reader.read_line(&mut line)? {
+			0 => Ok(None),
+			_ => Ok(Some(line.trim().to_string())),
+		}
+	}
+
+	pub fn write_cmd(&mut self, cmd: &str) -> Result<(), error::Error> {
+		self.writer.write_all(cmd.as_bytes())?;
+		self.writer.write_all(b"\n")?;
+		self.writer.flush()?;
+		Ok(())
+	}
+}
+
 #[derive(Clone)]
 struct Socket {
 	path: path::PathBuf,
@@ -149,7 +180,7 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 }
 
 fn run_client(mut stream: UnixStream) {
-	println!("Gotcha");
+	println!("Start");
 	match handle_client(stream) {
 		Ok(_) 	 => {},
 		Err(err) => eprintln!("{}", &format!("* * * {}", err).yellow().bold()),
@@ -158,19 +189,15 @@ fn run_client(mut stream: UnixStream) {
 }
 
 fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
-	let mut writer = stream.try_clone()?;
-	let mut reader = io::BufReader::new(stream);
-	let mut line = String::new();
+	let mut rpc = RPC::new(stream)?;
 	loop {
-		if reader.read_line(&mut line)? == 0 {
-			break; // end of input
-		}
-		match line.trim().to_lowercase().as_ref() {
-			"hi" => writer.write_all(b"Hello world.\n")?,
-				_  => break,
+		match rpc.read_cmd()? {
+			Some(cmd) => match cmd.as_ref() {
+				"hi" => rpc.write_cmd("Hello world")?,
+				cmd	 => println!(">>> UNKNOWN: {}", cmd),
+			},
+			None => break,
 		};
-		writer.flush()?;
-		line.clear();
 	}
 	Ok(())
 }
@@ -183,15 +210,13 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	}
 
 	let mut stream = UnixStream::connect(path)?;
-	let mut writer = stream.try_clone()?;
-	let mut reader = io::BufReader::new(stream);
+	let mut rpc = RPC::new(stream)?;
 
-	writer.write_all(b"hi\n")?;
-	writer.flush()?;
-
-	let mut buf = String::new();
-	reader.read_line(&mut buf)?;
-	println!(">>> {}", buf);
+	rpc.write_cmd("hi")?;
+	match rpc.read_cmd()? {
+		Some(cmd) => println!(">>> {}", cmd),
+		None 			=> println!(">>> <none>"),
+	};
 
 	Ok(())
 }
