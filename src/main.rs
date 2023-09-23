@@ -23,6 +23,10 @@ mod error;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+const CMD_SET: &str = "set";
+const CMD_GET: &str = "get";
+const CMD_OK:  &str = "ok";
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Options {
@@ -89,6 +93,17 @@ impl RPC {
 		}
 	}
 
+	pub fn expect_cmd(&mut self, expect: &str) -> Result<Option<String>, error::Error> {
+		match self.read_cmd()? {
+			Some(cmd) => if cmd == expect {
+				Ok(None)
+			}else{
+				Err(error::Error::Unexpected)
+			},
+			None => Err(error::Error::Unexpected),
+		}
+	}
+
 	pub fn write_cmd(&mut self, cmd: &str) -> Result<(), error::Error> {
 		self.writer.write_all(cmd.as_bytes())?;
 		self.writer.write_all(b"\n")?;
@@ -122,7 +137,6 @@ impl Socket {
 
 impl Drop for Socket {
 	fn drop(&mut self) {
-		println!("==> Cleaning up: {}", self.path.display());
 		let _ = self.cleanup();
 	}
 }
@@ -193,8 +207,11 @@ fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
 	loop {
 		match rpc.read_cmd()? {
 			Some(cmd) => match cmd.as_ref() {
-				"hi" => rpc.write_cmd("Hello world")?,
-				cmd	 => println!(">>> UNKNOWN: {}", cmd),
+				CMD_GET => rpc.write_cmd(CMD_OK)?,
+				cmd 		=> {
+					eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
+					break;
+				},
 			},
 			None => break,
 		};
@@ -212,11 +229,8 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	let mut stream = UnixStream::connect(path)?;
 	let mut rpc = RPC::new(stream)?;
 
-	rpc.write_cmd("hi")?;
-	match rpc.read_cmd()? {
-		Some(cmd) => println!(">>> {}", cmd),
-		None 			=> println!(">>> <none>"),
-	};
+	rpc.write_cmd(CMD_GET)?;
+	rpc.expect_cmd(CMD_OK)?;
 
 	Ok(())
 }

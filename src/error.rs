@@ -11,6 +11,7 @@ pub enum Error {
   Utf8Error(str::Utf8Error),
   FromUtf8Error(string::FromUtf8Error),
   SerdeError(serde_json::Error),
+  Unexpected,
   NotFound,
 }
 
@@ -45,6 +46,7 @@ impl fmt::Display for Error {
       Self::Utf8Error(err) => err.fmt(f),
       Self::FromUtf8Error(err) => err.fmt(f),
       Self::SerdeError(err) => err.fmt(f),
+      Self::Unexpected => write!(f, "Unexpected"),
       Self::NotFound => write!(f, "Not found"),
     }
   }
