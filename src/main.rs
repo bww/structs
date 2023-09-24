@@ -244,6 +244,10 @@ fn run_service(mut data: BTreeMap<&str, serde_json::Value>, rx: mpsc::Receiver<O
 	loop {
 		let cmd = rx.recv()?;
 		println!("%%% {}", cmd.name);
+		match cmd.name.as_ref() {
+			CMD_SET => println!("^^^ SET {:?}", cmd.data),
+			cmd 		=> eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
+		};
 	}
 	Ok(())
 }
