@@ -96,6 +96,10 @@ impl Operation {
 		Self::new(CMD_OK, &[], None)
 	}
 
+	fn new_found(data: &str) -> Self {
+		Self::new(CMD_OK, &[], Some(data))
+	}
+
 	fn new_get(name: &str) -> Self {
 		Self::new(CMD_GET, &[name], None)
 	}
@@ -155,7 +159,6 @@ impl RPC {
 			_ => None,
 		};
 
-		println!(">>> >>> >>> {:?} {:?}", args, data);
 		Ok(Some(Operation::new(args[0], &args[1..], data.as_deref())))
 	}
 
@@ -285,25 +288,42 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 fn run_service(mut data: BTreeMap<&str, serde_json::Value>, rx: mpsc::Receiver<Operation>) -> Result<(), error::Error> {
 	loop {
 		let cmd = rx.recv()?;
-		println!("%%% {}", cmd.name);
 		match cmd.name.as_ref() {
+			CMD_GET => run_service_get(&data, cmd)?,
 			CMD_SET => run_service_set(&mut data, cmd)?,
 			cmd 		=> eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
 		};
 	}
 }
 
-fn run_service_set(data: &mut BTreeMap<&str, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
+fn run_service_get(store: &BTreeMap<&str, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
+	if cmd.args.len() != 1 {
+		return Err(error::Error::Malformed);
+	}
+	match store.get(&cmd.args[0]) {
+		Some(data) => println!(">>> OK: {}", data),
+		None			 => println!(">>> OK: <NONE>"),
+	};
+	Ok(())
+}
+
+fn run_service_set(store: &mut BTreeMap<&str, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
+	if cmd.args.len() != 1 {
+		return Err(error::Error::Malformed);
+	}
+	let data = match cmd.data {
+		Some(data) => serde_json::from_str(&data)?,
+		None 			 => serde_json::Value::Null,
+	};
+	store.insert(&cmd.args[0], data);
 	Ok(())
 }
 
 fn run_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) {
-	println!("Start");
 	match handle_client(stream, tx) {
 		Ok(_) 	 => {},
 		Err(err) => eprintln!("{}", &format!("* * * {}", err).yellow().bold()),
 	};
-	println!("Client ended.");
 }
 
 fn handle_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) -> Result<(), error::Error> {
@@ -313,9 +333,8 @@ fn handle_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) -> Result<
 			Some(cmd) => cmd,
 			None 			=> break,
 		};
-		println!(">>> >>> >>> {:?}", cmd);
 		match cmd.name.as_ref() {
-			CMD_GET => rpc.write_cmd(&Operation::new_ok())?,
+			CMD_GET => rpc.write_cmd(&Operation::new_found("THE DATA"))?,
 			CMD_SET => rpc.write_cmd(&Operation::new_ok())?,
 			cmd 		=> {
 				eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
