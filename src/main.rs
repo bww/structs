@@ -112,6 +112,7 @@ impl RPC {
 			0 => return Ok(None),
 			_ => line.trim(),
 		};
+		println!(">>> {}", res);
 		match res.split_once(" ") {
 			Some((l, r)) => Ok(Some(Operation::new_with_data(l, r))),
 			None 				 => Ok(Some(Operation::new(&res))),
@@ -139,8 +140,11 @@ impl RPC {
 	}
 
 	pub fn write_line(&mut self, line: &[&str]) -> Result<(), error::Error> {
+		let mut i = 0;
 		for cmd in line { 
-			self.writer.write_all(cmd.as_bytes())?;
+			if i > 0 { self.writer.write_all(b" ")?; }
+			self.writer.write_all(cmd.trim().as_bytes())?;
+			i += 1;
 		}
 		self.writer.write_all(b"\n")?;
 		self.writer.flush()?;
@@ -244,6 +248,7 @@ fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
 		match rpc.read_cmd()? {
 			Some(cmd) => match cmd.name.as_ref() {
 				CMD_GET => rpc.write_cmd(&Operation::new(CMD_OK))?,
+				CMD_SET => rpc.write_cmd(&Operation::new(CMD_OK))?,
 				cmd 		=> {
 					eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
 					break;
@@ -283,15 +288,16 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 	}
 
 	let mut stream = UnixStream::connect(path)?;
-	let mut buf = String::new();
-	stream.read_to_string(&mut buf)?;
-	println!(">>> {}", buf);
+	let mut rpc = RPC::new(stream)?;
 
 	let mut data = String::new();
 	io::stdin().read_to_string(&mut data)?;
-	let data: serde_json::Value = serde_json::from_str(&data)?;
-	println!(">>> STORE: {}", data);
+	let value: serde_json::Value = serde_json::from_str(&data)?;
 	
+	// re-encode the value to ensure there is no extraneous whitespace
+	rpc.write_cmd(&Operation::new_with_data(CMD_SET, &value.to_string()))?;
+	rpc.expect_cmd(CMD_OK)?;
+
 	Ok(())
 }
 
