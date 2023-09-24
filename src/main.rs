@@ -129,7 +129,16 @@ impl RPC {
 		}
 	}
 
-	pub fn write_cmd(&mut self, line: &[&str]) -> Result<(), error::Error> {
+	pub fn write_cmd(&mut self, cmd: &Operation) -> Result<(), error::Error> {
+		let mut line: Vec<&str> = Vec::new();
+		line.push(&cmd.name);
+		if let Some(data) = &cmd.data {
+			line.push(data);
+		}
+		self.write_line(&line)
+	}
+
+	pub fn write_line(&mut self, line: &[&str]) -> Result<(), error::Error> {
 		for cmd in line { 
 			self.writer.write_all(cmd.as_bytes())?;
 		}
@@ -234,7 +243,7 @@ fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
 	loop {
 		match rpc.read_cmd()? {
 			Some(cmd) => match cmd.name.as_ref() {
-				CMD_GET => rpc.write_cmd(&[CMD_OK])?,
+				CMD_GET => rpc.write_cmd(&Operation::new(CMD_OK))?,
 				cmd 		=> {
 					eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
 					break;
@@ -256,8 +265,12 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	let mut stream = UnixStream::connect(path)?;
 	let mut rpc = RPC::new(stream)?;
 
-	rpc.write_cmd(&[CMD_GET])?;
-	rpc.expect_cmd(CMD_OK)?;
+	rpc.write_cmd(&Operation::new(CMD_GET))?;
+
+	match rpc.expect_cmd(CMD_OK)?.data {
+		Some(data) => println!("{}", data),
+		None			 => return Err(error::Error::NotFound),
+	};
 
 	Ok(())
 }
