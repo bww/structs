@@ -19,7 +19,6 @@ use rand::distributions::{Alphanumeric, DistString};
 use colored::Colorize;
 use clap::{Parser, Subcommand, Args};
 
-use serde::{Serialize, Deserialize};
 use serde_json;
 
 mod error;
@@ -266,7 +265,7 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 		}).expect("Could not set signal handler");
 	}
 
-	let data: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
+	let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 	let (tx, rx) = mpsc::channel();
 	thread::spawn(|| run_service(data, rx));
 
@@ -285,7 +284,7 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 	Ok(())
 }
 
-fn run_service(mut data: BTreeMap<&str, serde_json::Value>, rx: mpsc::Receiver<Operation>) -> Result<(), error::Error> {
+fn run_service(mut data: BTreeMap<String, serde_json::Value>, rx: mpsc::Receiver<Operation>) -> Result<(), error::Error> {
 	loop {
 		let cmd = rx.recv()?;
 		match cmd.name.as_ref() {
@@ -296,7 +295,7 @@ fn run_service(mut data: BTreeMap<&str, serde_json::Value>, rx: mpsc::Receiver<O
 	}
 }
 
-fn run_service_get(store: &BTreeMap<&str, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
+fn run_service_get(store: &BTreeMap<String, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
 	if cmd.args.len() != 1 {
 		return Err(error::Error::Malformed);
 	}
@@ -307,7 +306,7 @@ fn run_service_get(store: &BTreeMap<&str, serde_json::Value>, cmd: Operation) ->
 	Ok(())
 }
 
-fn run_service_set(store: &mut BTreeMap<&str, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
+fn run_service_set(store: &mut BTreeMap<String, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
 	if cmd.args.len() != 1 {
 		return Err(error::Error::Malformed);
 	}
@@ -315,7 +314,7 @@ fn run_service_set(store: &mut BTreeMap<&str, serde_json::Value>, cmd: Operation
 		Some(data) => serde_json::from_str(&data)?,
 		None 			 => serde_json::Value::Null,
 	};
-	store.insert(&cmd.args[0], data);
+	store.insert(cmd.args[0].to_owned(), data);
 	Ok(())
 }
 
