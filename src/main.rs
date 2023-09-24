@@ -14,6 +14,7 @@ use std::sync::mpsc;
 use ctrlc;
 
 use std::collections::BTreeMap;
+use rand::distributions::{Alphanumeric, DistString};
 
 use colored::Colorize;
 use clap::{Parser, Subcommand, Args};
@@ -72,24 +73,35 @@ struct StoreOptions {
   key: Option<String>,
 }
 
+#[derive(Debug)]
 struct Operation {
 	name: String,
+	args: Vec<String>,
 	data: Option<String>,
 }
 
 impl Operation {
-	fn new(name: &str) -> Self {
+	fn new(name: &str, args: &[&str], data: Option<&str>) -> Self {
 		Operation{
 			name: name.to_owned(),
-			data: None,
+			args: args.iter().map(|e| { e.to_string() }).collect(),
+			data: match data {
+				Some(data) => Some(data.to_string()),
+				None => None,
+			},
 		}
 	}
-		
-	fn new_with_data(name: &str, data: &str) -> Self {
-		Operation{
-			name: name.to_owned(),
-			data: Some(data.to_owned()),
-		}
+
+	fn new_ok() -> Self {
+		Self::new(CMD_OK, &[], None)
+	}
+
+	fn new_get(name: &str) -> Self {
+		Self::new(CMD_GET, &[name], None)
+	}
+
+	fn new_set(name: &str, data: &str) -> Self {
+		Self::new(CMD_SET, &[name], Some(data))
 	}
 }
 
@@ -114,11 +126,37 @@ impl RPC {
 			0 => return Ok(None),
 			_ => line.trim(),
 		};
-		println!(">>> {}", res);
-		match res.split_once(" ") {
-			Some((l, r)) => Ok(Some(Operation::new_with_data(l, r))),
-			None 				 => Ok(Some(Operation::new(&res))),
+
+		let mut text = res;
+		let mut args: Vec<&str> = Vec::new();
+		loop {
+			match text.split_once(" ") {
+				Some((l, r)) => {
+					args.push(l);
+					text = r;
+				},
+				None => {
+					args.push(text);
+					break;
+				},
+			}
 		}
+
+		if args.len() < 1 {
+			return Err(error::Error::Malformed);
+		}
+
+		let mut line = String::new();
+		let data = match args[0] {
+			CMD_SET => match self.reader.read_line(&mut line)? {
+				0 => return Err(error::Error::Malformed),
+				_ => Some(line.trim().to_string()),
+			},
+			_ => None,
+		};
+
+		println!(">>> >>> >>> {:?} {:?}", args, data);
+		Ok(Some(Operation::new(args[0], &args[1..], data.as_deref())))
 	}
 
 	pub fn expect_cmd(&mut self, expect: &str) -> Result<Operation, error::Error> {
@@ -135,10 +173,14 @@ impl RPC {
 	pub fn write_cmd(&mut self, cmd: &Operation) -> Result<(), error::Error> {
 		let mut line: Vec<&str> = Vec::new();
 		line.push(&cmd.name);
-		if let Some(data) = &cmd.data {
-			line.push(data);
+		for arg in &cmd.args {
+			line.push(arg);
 		}
-		self.write_line(&line)
+		self.write_line(&line)?;
+		if let Some(data) = &cmd.data {
+			self.write_line(&[&data])?;
+		}
+		Ok(())
 	}
 
 	pub fn write_line(&mut self, line: &[&str]) -> Result<(), error::Error> {
@@ -245,10 +287,13 @@ fn run_service(mut data: BTreeMap<&str, serde_json::Value>, rx: mpsc::Receiver<O
 		let cmd = rx.recv()?;
 		println!("%%% {}", cmd.name);
 		match cmd.name.as_ref() {
-			CMD_SET => println!("^^^ SET {:?}", cmd.data),
+			CMD_SET => run_service_set(&mut data, cmd)?,
 			cmd 		=> eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
 		};
 	}
+}
+
+fn run_service_set(data: &mut BTreeMap<&str, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
 	Ok(())
 }
 
@@ -268,9 +313,10 @@ fn handle_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) -> Result<
 			Some(cmd) => cmd,
 			None 			=> break,
 		};
+		println!(">>> >>> >>> {:?}", cmd);
 		match cmd.name.as_ref() {
-			CMD_GET => rpc.write_cmd(&Operation::new(CMD_OK))?,
-			CMD_SET => rpc.write_cmd(&Operation::new(CMD_OK))?,
+			CMD_GET => rpc.write_cmd(&Operation::new_ok())?,
+			CMD_SET => rpc.write_cmd(&Operation::new_ok())?,
 			cmd 		=> {
 				eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
 				break;
@@ -294,7 +340,7 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	let mut stream = UnixStream::connect(path)?;
 	let mut rpc = RPC::new(stream)?;
 
-	rpc.write_cmd(&Operation::new(CMD_GET))?;
+	rpc.write_cmd(&Operation::new_get(&sub.key))?;
 
 	match rpc.expect_cmd(CMD_OK)?.data {
 		Some(data) => println!("{}", data),
@@ -313,15 +359,20 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 
 	let mut stream = UnixStream::connect(path)?;
 	let mut rpc = RPC::new(stream)?;
+	let key = match &sub.key {
+		Some(key) => key.to_string(),
+		None 			=> Alphanumeric.sample_string(&mut rand::thread_rng(), 16),
+	};
 
 	let mut data = String::new();
 	io::stdin().read_to_string(&mut data)?;
 	let value: serde_json::Value = serde_json::from_str(&data)?;
 	
 	// re-encode the value to ensure there is no extraneous whitespace
-	rpc.write_cmd(&Operation::new_with_data(CMD_SET, &value.to_string()))?;
+	rpc.write_cmd(&Operation::new_set(&key, &value.to_string()))?;
 	rpc.expect_cmd(CMD_OK)?;
 
+	println!("{}", key);
 	Ok(())
 }
 

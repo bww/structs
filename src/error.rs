@@ -14,6 +14,7 @@ pub enum Error {
   SerdeError(serde_json::Error),
   SendError,
   RecvError(mpsc::RecvError),
+  Malformed,
   Unexpected,
   NotFound,
 }
@@ -57,6 +58,7 @@ impl fmt::Display for Error {
       Self::SerdeError(err) => err.fmt(f),
       Self::SendError => write!(f, "Could not send"),
       Self::RecvError(err) => err.fmt(f),
+      Self::Malformed => write!(f, "Malformed"),
       Self::Unexpected => write!(f, "Unexpected"),
       Self::NotFound => write!(f, "Not found"),
     }
