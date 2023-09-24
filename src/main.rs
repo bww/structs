@@ -70,6 +70,27 @@ struct StoreOptions {
   key: Option<String>,
 }
 
+struct Operation {
+	name: String,
+	data: Option<String>,
+}
+
+impl Operation {
+	fn new(name: &str) -> Self {
+		Operation{
+			name: name.to_owned(),
+			data: None,
+		}
+	}
+		
+	fn new_with_data(name: &str, data: &str) -> Self {
+		Operation{
+			name: name.to_owned(),
+			data: Some(data.to_owned()),
+		}
+	}
+}
+
 struct RPC {
 	reader: io::BufReader<UnixStream>,
 	writer: UnixStream,
@@ -85,18 +106,22 @@ impl RPC {
 		})
 	}
 
-	pub fn read_cmd(&mut self) -> Result<Option<String>, error::Error> {
+	pub fn read_cmd(&mut self) -> Result<Option<Operation>, error::Error> {
 		let mut line = String::new();
-		match self.reader.read_line(&mut line)? {
-			0 => Ok(None),
-			_ => Ok(Some(line.trim().to_string())),
+		let res = match self.reader.read_line(&mut line)? {
+			0 => return Ok(None),
+			_ => line.trim(),
+		};
+		match res.split_once(" ") {
+			Some((l, r)) => Ok(Some(Operation::new_with_data(l, r))),
+			None 				 => Ok(Some(Operation::new(&res))),
 		}
 	}
 
-	pub fn expect_cmd(&mut self, expect: &str) -> Result<Option<String>, error::Error> {
+	pub fn expect_cmd(&mut self, expect: &str) -> Result<Operation, error::Error> {
 		match self.read_cmd()? {
-			Some(cmd) => if cmd == expect {
-				Ok(None)
+			Some(cmd) => if cmd.name == expect {
+				Ok(cmd)
 			}else{
 				Err(error::Error::Unexpected)
 			},
@@ -104,8 +129,10 @@ impl RPC {
 		}
 	}
 
-	pub fn write_cmd(&mut self, cmd: &str) -> Result<(), error::Error> {
-		self.writer.write_all(cmd.as_bytes())?;
+	pub fn write_cmd(&mut self, line: &[&str]) -> Result<(), error::Error> {
+		for cmd in line { 
+			self.writer.write_all(cmd.as_bytes())?;
+		}
 		self.writer.write_all(b"\n")?;
 		self.writer.flush()?;
 		Ok(())
@@ -206,8 +233,8 @@ fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
 	let mut rpc = RPC::new(stream)?;
 	loop {
 		match rpc.read_cmd()? {
-			Some(cmd) => match cmd.as_ref() {
-				CMD_GET => rpc.write_cmd(CMD_OK)?,
+			Some(cmd) => match cmd.name.as_ref() {
+				CMD_GET => rpc.write_cmd(&[CMD_OK])?,
 				cmd 		=> {
 					eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
 					break;
@@ -229,7 +256,7 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	let mut stream = UnixStream::connect(path)?;
 	let mut rpc = RPC::new(stream)?;
 
-	rpc.write_cmd(CMD_GET)?;
+	rpc.write_cmd(&[CMD_GET])?;
 	rpc.expect_cmd(CMD_OK)?;
 
 	Ok(())
