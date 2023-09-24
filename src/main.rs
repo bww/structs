@@ -10,8 +10,10 @@ use std::io::Read;
 
 use std::thread;
 use std::os::unix::net::{UnixStream, UnixListener};
-use std::sync::mpsc::channel;
+use std::sync::mpsc;
 use ctrlc;
+
+use std::collections::BTreeMap;
 
 use colored::Colorize;
 use clap::{Parser, Subcommand, Args};
@@ -219,11 +221,16 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 		}).expect("Could not set signal handler");
 	}
 
+	let data: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
+	let (tx, rx) = mpsc::channel();
+	thread::spawn(|| run_service(data, rx));
+
 	let listener = UnixListener::bind(path)?;
 	for stream in listener.incoming() {
 		match stream {
 			Ok(stream) => {
-				thread::spawn(|| run_client(stream));
+				let tx = tx.clone();
+				thread::spawn(|| run_client(stream, tx));
 			}
 			Err(err) => {
 				break;
@@ -233,28 +240,41 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 	Ok(())
 }
 
-fn run_client(mut stream: UnixStream) {
+fn run_service(mut data: BTreeMap<&str, serde_json::Value>, rx: mpsc::Receiver<Operation>) -> Result<(), error::Error> {
+	loop {
+		let cmd = rx.recv()?;
+		println!("%%% {}", cmd.name);
+	}
+	Ok(())
+}
+
+fn run_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) {
 	println!("Start");
-	match handle_client(stream) {
+	match handle_client(stream, tx) {
 		Ok(_) 	 => {},
 		Err(err) => eprintln!("{}", &format!("* * * {}", err).yellow().bold()),
 	};
 	println!("Client ended.");
 }
 
-fn handle_client(mut stream: UnixStream) -> Result<(), error::Error> {
+fn handle_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) -> Result<(), error::Error> {
 	let mut rpc = RPC::new(stream)?;
 	loop {
-		match rpc.read_cmd()? {
-			Some(cmd) => match cmd.name.as_ref() {
-				CMD_GET => rpc.write_cmd(&Operation::new(CMD_OK))?,
-				CMD_SET => rpc.write_cmd(&Operation::new(CMD_OK))?,
-				cmd 		=> {
-					eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
-					break;
-				},
+		let cmd = match rpc.read_cmd()? {
+			Some(cmd) => cmd,
+			None 			=> break,
+		};
+		match cmd.name.as_ref() {
+			CMD_GET => rpc.write_cmd(&Operation::new(CMD_OK))?,
+			CMD_SET => rpc.write_cmd(&Operation::new(CMD_OK))?,
+			cmd 		=> {
+				eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold());
+				break;
 			},
-			None => break,
+		};
+		match tx.send(cmd) {
+			Ok(_) 	 => {},
+			Err(err) => return Err(error::Error::SendError),
 		};
 	}
 	Ok(())

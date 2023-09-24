@@ -2,6 +2,7 @@ use std::io;
 use std::fmt;
 use std::str;
 use std::string;
+use std::sync::mpsc;
 
 use serde_json;
 
@@ -11,6 +12,8 @@ pub enum Error {
   Utf8Error(str::Utf8Error),
   FromUtf8Error(string::FromUtf8Error),
   SerdeError(serde_json::Error),
+  SendError,
+  RecvError(mpsc::RecvError),
   Unexpected,
   NotFound,
 }
@@ -39,6 +42,12 @@ impl From<serde_json::Error> for Error {
   }
 }
 
+impl From<mpsc::RecvError> for Error {
+  fn from(err: mpsc::RecvError) -> Self {
+		Self::RecvError(err)
+  }
+}
+
 impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
@@ -46,6 +55,8 @@ impl fmt::Display for Error {
       Self::Utf8Error(err) => err.fmt(f),
       Self::FromUtf8Error(err) => err.fmt(f),
       Self::SerdeError(err) => err.fmt(f),
+      Self::SendError => write!(f, "Could not send"),
+      Self::RecvError(err) => err.fmt(f),
       Self::Unexpected => write!(f, "Unexpected"),
       Self::NotFound => write!(f, "Not found"),
     }
