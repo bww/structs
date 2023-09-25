@@ -11,6 +11,7 @@ use std::io::Read;
 use std::thread;
 use std::os::unix::net::{UnixStream, UnixListener};
 use std::sync::mpsc;
+use heapless::spsc;
 use ctrlc;
 
 use std::collections::BTreeMap;
@@ -22,6 +23,7 @@ use clap::{Parser, Subcommand, Args};
 use serde_json;
 
 mod error;
+mod service;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -73,7 +75,7 @@ struct StoreOptions {
 }
 
 #[derive(Debug)]
-struct Operation {
+pub struct Operation {
 	name: String,
 	args: Vec<String>,
 	data: Option<String>,
@@ -105,6 +107,28 @@ impl Operation {
 
 	fn new_set(name: &str, data: &str) -> Self {
 		Self::new(CMD_SET, &[name], Some(data))
+	}
+}
+
+pub struct OperationRequest<'a> {
+	op: &'a Operation,
+	qq: spsc::Queue<Operation, 2>,
+}
+
+impl<'a> OperationRequest<'a> {
+	fn new(op: &'a Operation) -> Self {
+		OperationRequest{
+			op: op,
+			qq: spsc::Queue::<Operation, 2>::new(),
+		}
+	}
+
+	pub fn operation(&'a mut self) -> &'a Operation {
+		self.op
+	}
+
+	pub fn channel(&'a mut self) -> (spsc::Producer<'a, Operation, 2>, spsc::Consumer<'a, Operation, 2>) {
+		self.qq.split()
 	}
 }
 
@@ -267,7 +291,7 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 
 	let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 	let (tx, rx) = mpsc::channel();
-	thread::spawn(|| run_service(data, rx));
+	thread::spawn(|| service::run(data, rx));
 
 	let listener = UnixListener::bind(path)?;
 	for stream in listener.incoming() {
@@ -281,40 +305,6 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 			}
 		}
 	}
-	Ok(())
-}
-
-fn run_service(mut data: BTreeMap<String, serde_json::Value>, rx: mpsc::Receiver<Operation>) -> Result<(), error::Error> {
-	loop {
-		let cmd = rx.recv()?;
-		match cmd.name.as_ref() {
-			CMD_GET => run_service_get(&data, cmd)?,
-			CMD_SET => run_service_set(&mut data, cmd)?,
-			cmd 		=> eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
-		};
-	}
-}
-
-fn run_service_get(store: &BTreeMap<String, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
-	if cmd.args.len() != 1 {
-		return Err(error::Error::Malformed);
-	}
-	match store.get(&cmd.args[0]) {
-		Some(data) => println!(">>> OK: {}", data),
-		None			 => println!(">>> OK: <NONE>"),
-	};
-	Ok(())
-}
-
-fn run_service_set(store: &mut BTreeMap<String, serde_json::Value>, cmd: Operation) -> Result<(), error::Error> {
-	if cmd.args.len() != 1 {
-		return Err(error::Error::Malformed);
-	}
-	let data = match cmd.data {
-		Some(data) => serde_json::from_str(&data)?,
-		None 			 => serde_json::Value::Null,
-	};
-	store.insert(cmd.args[0].to_owned(), data);
 	Ok(())
 }
 
