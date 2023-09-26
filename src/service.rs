@@ -30,9 +30,10 @@ fn run_get(store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
 	}
-	match store.get(&cmd.args()[0]) {
-		Some(data) => req.send(rpc::Operation::new_found(&data.to_string()))?,
-		None			 => req.send(rpc::Operation::new_none())?,
+	let name = cmd.args()[0].to_owned();
+	match store.get(&name) {
+		Some(data) => req.send(rpc::Operation::new_found(&name, &data.to_string()))?,
+		None			 => req.send(rpc::Operation::new_none(&name))?,
 	};
 	Ok(())
 }

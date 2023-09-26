@@ -193,11 +193,17 @@ fn cmd_get(_opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 
 	rpc.write_cmd(&rpc::Operation::new_get(&sub.key))?;
 
-	match rpc.expect_cmd(rpc::CMD_OK)?.data() {
-		Some(data) => println!("{}", data),
-		None			 => return Err(error::Error::NotFound),
-	};
+	let rsp = rpc.expect_cmd(&[rpc::CMD_FOUND, rpc::CMD_NONE])?;
+	let data = match rsp.name() {
+		rpc::CMD_NONE  => Err(error::Error::NotFound),
+		rpc::CMD_FOUND => match rsp.data() {
+			Some(data) => Ok(data),
+			None			 => Err(error::Error::Malformed),
+		},
+		_ => Err(error::Error::Malformed),
+	}?;
 
+	println!("{}", data);
 	Ok(())
 }
 
@@ -221,7 +227,7 @@ fn cmd_set(_opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 	
 	// re-encode the value to ensure there is no extraneous whitespace
 	rpc.write_cmd(&rpc::Operation::new_set(&key, &value.to_string()))?;
-	rpc.expect_cmd(rpc::CMD_OK)?;
+	rpc.expect_cmd(&[rpc::CMD_OK])?;
 
 	println!("{}", key);
 	Ok(())

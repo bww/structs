@@ -9,6 +9,7 @@ use crate::error;
 pub const CMD_SET: 	 &str = "set";
 pub const CMD_GET: 	 &str = "get";
 pub const CMD_FOUND: &str = "found";
+pub const CMD_NONE:  &str = "none";
 pub const CMD_OK:  	 &str = "ok";
 
 #[derive(Debug)]
@@ -46,12 +47,12 @@ impl Operation {
 		Self::new(CMD_OK, &[], None)
 	}
 
-	pub fn new_none() -> Self {
-		Self::new(CMD_OK, &[], None)
+	pub fn new_found(name: &str, data: &str) -> Self {
+		Self::new(CMD_FOUND, &[name], Some(data))
 	}
 
-	pub fn new_found(data: &str) -> Self {
-		Self::new(CMD_FOUND, &[], Some(data))
+	pub fn new_none(name: &str) -> Self {
+		Self::new(CMD_NONE, &[name], None)
 	}
 
 	pub fn new_get(name: &str) -> Self {
@@ -134,20 +135,24 @@ impl RPC {
 		}
 
 		let mut line = String::new();
-		let data = match args[0] {
-			CMD_SET | CMD_FOUND => match self.reader.read_line(&mut line)? {
+		let data = if match args[0] {
+			CMD_SET | CMD_FOUND => true,
+			_ 									=> false,
+		}{
+			match self.reader.read_line(&mut line)? {
 				0 => return Err(error::Error::Malformed),
 				_ => Some(line.trim().to_string()),
-			},
-			_ => None,
+			}
+		} else {
+			None
 		};
 
 		Ok(Some(Operation::new(args[0], &args[1..], data.as_deref())))
 	}
 
-	pub fn expect_cmd(&mut self, expect: &str) -> Result<Operation, error::Error> {
+	pub fn expect_cmd(&mut self, expect: &[&str]) -> Result<Operation, error::Error> {
 		match self.read_cmd()? {
-			Some(cmd) => if cmd.name == expect {
+			Some(cmd) => if expect.iter().any(|&e| { cmd.name == e}) {
 				Ok(cmd)
 			}else{
 				Err(error::Error::Unexpected)
