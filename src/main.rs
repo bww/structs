@@ -11,7 +11,6 @@ use std::io::Read;
 use std::thread;
 use std::os::unix::net::{UnixStream, UnixListener};
 use std::sync::mpsc;
-use heapless::spsc;
 use ctrlc;
 
 use std::collections::BTreeMap;
@@ -97,6 +96,10 @@ impl Operation {
 		Self::new(CMD_OK, &[], None)
 	}
 
+	fn new_none() -> Self {
+		Self::new(CMD_OK, &[], None)
+	}
+
 	fn new_found(data: &str) -> Self {
 		Self::new(CMD_OK, &[], Some(data))
 	}
@@ -110,25 +113,32 @@ impl Operation {
 	}
 }
 
-pub struct OperationRequest<'a> {
-	op: &'a Operation,
-	qq: spsc::Queue<Operation, 2>,
+pub struct OperationRequest {
+	op: Operation,
+	tx: mpsc::Sender<Operation>,
 }
 
-impl<'a> OperationRequest<'a> {
-	fn new(op: &'a Operation) -> Self {
+impl OperationRequest {
+	fn new(op: Operation, tx: mpsc::Sender<Operation>) -> Self {
 		OperationRequest{
 			op: op,
-			qq: spsc::Queue::<Operation, 2>::new(),
+			tx: tx,
 		}
 	}
 
-	pub fn operation(&'a mut self) -> &'a Operation {
-		self.op
+	pub fn name<'a>(&'a self) -> &'a str {
+		&self.op.name
 	}
 
-	pub fn channel(&'a mut self) -> (spsc::Producer<'a, Operation, 2>, spsc::Consumer<'a, Operation, 2>) {
-		self.qq.split()
+	pub fn operation<'a>(&'a mut self) -> &'a Operation {
+		&self.op
+	}
+
+	pub fn send(&self, op: Operation) -> Result<(), error::Error> {
+		match self.tx.send(op) {
+			Ok(_) 	 => Ok(()),
+			Err(err) => Err(error::Error::SendError),
+		}
 	}
 }
 
@@ -308,14 +318,14 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 	Ok(())
 }
 
-fn run_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) {
+fn run_client(mut stream: UnixStream, tx: mpsc::Sender<OperationRequest>) {
 	match handle_client(stream, tx) {
 		Ok(_) 	 => {},
 		Err(err) => eprintln!("{}", &format!("* * * {}", err).yellow().bold()),
 	};
 }
 
-fn handle_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) -> Result<(), error::Error> {
+fn handle_client(mut stream: UnixStream, tx: mpsc::Sender<OperationRequest>) -> Result<(), error::Error> {
 	let mut rpc = RPC::new(stream)?;
 	loop {
 		let cmd = match rpc.read_cmd()? {
@@ -330,10 +340,13 @@ fn handle_client(mut stream: UnixStream, tx: mpsc::Sender<Operation>) -> Result<
 				break;
 			},
 		};
-		match tx.send(cmd) {
+		let (rsp_tx, rsp_rx) = mpsc::channel();
+		let mut req = OperationRequest::new(cmd, rsp_tx);
+		match tx.send(req) {
 			Ok(_) 	 => {},
 			Err(err) => return Err(error::Error::SendError),
 		};
+		println!(">>> !!! >>> {:?}", rsp_rx.recv());
 	}
 	Ok(())
 }
