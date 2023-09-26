@@ -4,29 +4,29 @@ use std::sync::mpsc;
 use colored::Colorize;
 use serde_json;
 
+use crate::Options;
 use crate::error;
 use crate::rpc;
 
 use crate::rpc::CMD_GET;
 use crate::rpc::CMD_SET;
 
-pub fn run(mut data: BTreeMap<String, serde_json::Value>, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
+pub fn run(opts: Options, mut data: BTreeMap<String, serde_json::Value>, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
 	loop {
 		let req = rx.recv()?;
 		match req.name().as_ref() {
-			CMD_GET => run_get(&data, req)?,
-			CMD_SET => run_set(&mut data, req)?,
+			CMD_GET => run_get(&opts, &data, req)?,
+			CMD_SET => run_set(&opts, &mut data, req)?,
 			cmd 		=> eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
 		};
-		for item in &data {
-			println!(">>> DATA >>> {:?}", item);
-		}
 	}
 }
 
-fn run_get(store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
+fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
-	println!(">>> GET: {:?}", cmd);
+	if opts.debug {
+		println!(">>> GET: {:?}", cmd);
+	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
 	}
@@ -38,9 +38,11 @@ fn run_get(store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -
 	Ok(())
 }
 
-fn run_set(store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
+fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
-	println!(">>> SET: {:?}", cmd);
+	if opts.debug {
+		println!(">>> SET: {:?}", cmd);
+	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
 	}

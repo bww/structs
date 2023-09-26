@@ -25,18 +25,18 @@ mod rpc;
 
 const _VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
-struct Options {
+pub struct Options {
   #[clap(long, help="Enable debugging mode")]
-  debug: bool,
+  pub debug: bool,
   #[clap(long, help="Enable verbose output")]
-  verbose: bool,
+  pub verbose: bool,
   #[clap(subcommand)]
   command: Command,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 enum Command {
   #[clap(name="run", about="Start the structs daemon")]
   Run(RunOptions),
@@ -46,13 +46,13 @@ enum Command {
   Store(StoreOptions),
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 struct RunOptions {
   #[clap(long="socket", name="socket", help="The path to the server socket")]
   path: Option<String>,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 struct FetchOptions {
   #[clap(long="socket", name="socket", help="The path to the server socket")]
   path: Option<String>,
@@ -60,7 +60,7 @@ struct FetchOptions {
   key: String,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 struct StoreOptions {
   #[clap(long="socket", name="socket", help="The path to the server socket")]
   path: Option<String>,
@@ -119,7 +119,7 @@ fn cmd() -> Result<(), error::Error> {
   Ok(())
 }
 
-fn cmd_run(_opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
+fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
 	let sock = Socket::new(&path);
 	let path = path.as_path();
@@ -137,7 +137,8 @@ fn cmd_run(_opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 
 	let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 	let (tx, rx) = mpsc::channel();
-	thread::spawn(|| service::run(data, rx));
+	let opts = opts.clone();
+	thread::spawn(|| service::run(opts, data, rx));
 
 	let listener = UnixListener::bind(path)?;
 	for stream in listener.incoming() {
