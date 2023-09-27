@@ -25,7 +25,7 @@ pub fn run(opts: Options, mut data: BTreeMap<String, serde_json::Value>, rx: mps
 fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
-		println!(">>> GET: {:?}", cmd);
+		println!(">>> {:?}", cmd);
 	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
@@ -41,7 +41,7 @@ fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req:
 fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
-		println!(">>> SET: {:?}", cmd);
+		println!(">>> {:?}", cmd);
 	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);

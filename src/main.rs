@@ -21,6 +21,7 @@ use serde_json;
 
 mod error;
 mod service;
+mod client;
 mod rpc;
 
 const _VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -137,47 +138,21 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 
 	let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 	let (tx, rx) = mpsc::channel();
-	let opts = opts.clone();
-	thread::spawn(|| service::run(opts, data, rx));
+	let svcopts = opts.clone();
+	thread::spawn(|| service::run(svcopts, data, rx));
 
 	let listener = UnixListener::bind(path)?;
 	for stream in listener.incoming() {
 		match stream {
 			Ok(stream) => {
 				let tx = tx.clone();
-				thread::spawn(|| run_client(stream, tx));
+				let cliopts = opts.clone();
+				thread::spawn(|| client::run(cliopts, stream, tx));
 			}
 			Err(_) => {
 				break;
 			}
 		}
-	}
-	Ok(())
-}
-
-fn run_client(stream: UnixStream, tx: mpsc::Sender<rpc::Request>) {
-	match handle_client(stream, tx) {
-		Ok(_) 	 => {},
-		Err(err) => eprintln!("{}", &format!("* * * {}", err).yellow().bold()),
-	};
-}
-
-fn handle_client(stream: UnixStream, tx: mpsc::Sender<rpc::Request>) -> Result<(), error::Error> {
-	let mut rpc = rpc::RPC::new(stream)?;
-	loop {
-		let cmd = match rpc.read_cmd()? {
-			Some(cmd) => cmd,
-			None 			=> break,
-		};
-		let (rsp_tx, rsp_rx) = mpsc::channel();
-		let req = rpc::Request::new(cmd, rsp_tx);
-		match tx.send(req) {
-			Ok(_)  => {},
-			Err(_) => return Err(error::Error::SendError),
-		};
-		let rsp = rsp_rx.recv()?;
-		println!(">>> RSP >>> {:?}", &rsp);
-		rpc.write_cmd(&rsp)?;
 	}
 	Ok(())
 }
