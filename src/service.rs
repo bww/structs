@@ -7,6 +7,7 @@ use serde_json;
 use crate::Options;
 use crate::error;
 use crate::rpc;
+use crate::jsonpath;
 
 use crate::rpc::CMD_GET;
 use crate::rpc::CMD_SET;
@@ -30,10 +31,26 @@ fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req:
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
 	}
-	let name = cmd.args()[0].to_owned();
-	match store.get(&name) {
-		Some(data) => req.send(rpc::Operation::new_found(&name, &data.to_string()))?,
-		None			 => req.send(rpc::Operation::new_none(&name))?,
+	let jp = jsonpath::Path::new(&cmd.args()[0]);
+	let (name, path) = jp.next();
+	let name = match name {
+		Some(name) => name,
+		None => return Err(error::Error::Malformed),
+	};
+	let (data, rest) = if let Some(data) = store.get(name) {
+		match path {
+			Some(path) => jsonpath::Path::new(path).find(data),
+			None 			 => (Some(data), None),
+		}
+	} else {
+		(None, None)
+	};
+	if let Some(_) = rest {
+		return Err(error::Error::Malformed); // cannot have a remaining path
+	}
+	match data { 
+		Some(data) => req.send(rpc::Operation::new_found(name, &data.to_string()))?,
+		None			 => req.send(rpc::Operation::new_none(name))?,
 	};
 	Ok(())
 }

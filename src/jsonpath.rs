@@ -11,6 +11,10 @@ impl Path {
 		Self(path.to_string())
 	}
 
+	pub fn path<'a>(&'a self) -> &'a str {
+		&self.0
+	}
+
 	pub fn find<'a>(&self, value: &'a Value) -> (Option<&'a Value>, Option<Path>) {
 		let (v, p) = self.deref(value);
 		match v {
@@ -41,7 +45,7 @@ impl Path {
 		}
 	}
 
-	fn next<'a>(&'a self) -> (Option<&'a str>, Option<&'a str>) {
+	pub fn next<'a>(&'a self) -> (Option<&'a str>, Option<&'a str>) {
 		match self.0.find(SEP) {
 			Some(x) => (Some(&self.0[..x]), if self.0.len() > x {
 				Some(&self.0[x+1..])
@@ -121,7 +125,6 @@ mod tests {
     assert_eq!((None, Some(Path::new("invalid"))), p.find(&v));
 		let p = Path::new("sub2.B.two.invalid.nonsense");
     assert_eq!((None, Some(Path::new("invalid.nonsense"))), p.find(&v));
-
   }
 }
 
