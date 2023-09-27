@@ -20,9 +20,10 @@ use clap::{Parser, Subcommand, Args};
 use serde_json;
 
 mod error;
+mod rpc;
 mod service;
 mod client;
-mod rpc;
+mod jsonpath;
 
 const _VERSION: &str = env!("CARGO_PKG_VERSION");
 
