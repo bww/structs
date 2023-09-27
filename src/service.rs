@@ -45,10 +45,9 @@ fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req:
 	} else {
 		(None, None)
 	};
-	if let Some(_) = rest { // cannot have a remaining path
-		req.send(rpc::Operation::new_none(name))?;
-	} else {
-		match data { 
+	match rest {
+		Some(_) => req.send(rpc::Operation::new_none(name))?,
+		None 		=> match data { 
 			Some(data) => req.send(rpc::Operation::new_found(name, &data.to_string()))?,
 			None			 => req.send(rpc::Operation::new_none(name))?,
 		}
