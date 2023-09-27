@@ -11,7 +11,7 @@ impl Path {
 		Self(path.to_string())
 	}
 
-	pub fn path<'a>(&'a self) -> &'a str {
+	pub fn _path<'a>(&'a self) -> &'a str {
 		&self.0
 	}
 
