@@ -18,7 +18,6 @@ pub enum Error {
   Unexpected,
   NotFound,
   ServiceError,
-  Shutdown,
 }
 
 impl From<str::Utf8Error> for Error {
@@ -63,7 +62,6 @@ impl fmt::Display for Error {
       Self::Malformed => write!(f, "Malformed"),
       Self::Unexpected => write!(f, "Unexpected"),
       Self::NotFound => write!(f, "Not found"),
-      Self::Shutdown => write!(f, "Service is shutting down"),
       Self::ServiceError => write!(f, "Service error"),
     }
   }

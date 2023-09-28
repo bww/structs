@@ -1,5 +1,4 @@
 use std::io;
-use std::fs;
 use std::env;
 use std::str;
 use std::path;
@@ -10,7 +9,6 @@ use std::io::Read;
 use std::thread;
 use std::os::unix::net::{UnixStream, UnixListener};
 use std::sync::mpsc;
-use ctrlc;
 
 use std::collections::BTreeMap;
 use rand::distributions::{Alphanumeric, DistString};
@@ -47,12 +45,16 @@ enum Command {
   Fetch(FetchOptions),
   #[clap(name="set", about="Store a value in the service")]
   Store(StoreOptions),
+  #[clap(name="rm", about="Delete a value from the service")]
+  Delete(DeleteOptions),
   #[clap(name="stop", about="Shutdown the service, if it is running")]
   Shutdown(ShutdownOptions),
 }
 
 #[derive(Args, Debug, Clone)]
-struct RunOptions {
+pub struct RunOptions {
+  #[clap(long="finalize", help="Shut down the service after the last entry is deleted")]
+  pub finalize: bool,
   #[clap(long="socket", name="socket", help="The path to the server socket")]
   path: Option<String>,
 }
@@ -74,38 +76,17 @@ struct StoreOptions {
 }
 
 #[derive(Args, Debug, Clone)]
+struct DeleteOptions {
+  #[clap(long="socket", name="socket", help="The path to the server socket")]
+  path: Option<String>,
+  #[clap(help="The key to the record to delete")]
+  key: String,
+}
+
+#[derive(Args, Debug, Clone)]
 struct ShutdownOptions {
   #[clap(long="socket", name="socket", help="The path to the server socket")]
   path: Option<String>,
-}
-
-#[derive(Clone)]
-struct Socket {
-	path: path::PathBuf,
-}
-
-impl Socket {
-	pub fn new<P: AsRef<path::Path>>(path: P) -> Self {
-		Self{
-			path: path.as_ref().into(),
-		}
-	}
-
-	pub fn cleanup(&mut self) -> io::Result<()> {
-		match fs::remove_file(&self.path) {
-			Ok(_)		 => Ok(()),
-			Err(err) => {
-				eprintln!("{}", &format!("* * * {}", err).yellow().bold());
-				Err(err)
-			},
-		}
-	}
-}
-
-impl Drop for Socket {
-	fn drop(&mut self) {
-		let _ = self.cleanup();
-	}
 }
 
 fn main() {
@@ -124,8 +105,8 @@ fn run_svc<P: AsRef<path::Path>>(opts: &Options, path: P) -> Result<(), error::E
 		eprintln!(">>> No service running; starting: {}", me.display());
 	}
 	process::Command::new(me).arg("run").spawn()?;
-	let mut dur = time::Duration::from_millis(10);
-	for _ in 0..10 {
+	let mut dur = time::Duration::from_millis(1);
+	for _ in 0..5 {
 		thread::sleep(dur);
 		if path.as_ref().exists() {
 			return Ok(());
@@ -142,6 +123,7 @@ fn cmd() -> Result<(), error::Error> {
 		Command::Run(sub)			 => cmd_run(&opts, sub),
     Command::Fetch(sub)		 => cmd_get(&opts, sub),
     Command::Store(sub)		 => cmd_set(&opts, sub),
+    Command::Delete(sub)	 => cmd_delete(&opts, sub),
     Command::Shutdown(sub) => cmd_stop(&opts, sub),
   }?;
 
@@ -150,24 +132,15 @@ fn cmd() -> Result<(), error::Error> {
 
 fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
-	let sock = Socket::new(&path);
+	let sock = rpc::Socket::new(&path);
 	let path = path.as_path();
 	println!("==> Listening on: {}", path.display());
-
-	{
-		let mut sock = sock.clone();
-		ctrlc::set_handler(move || {
-			process::exit(match sock.cleanup() {
-				Ok(_)  => 0,
-				Err(_) => 1,
-			});
-		}).expect("Could not set signal handler");
-	}
 
 	let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 	let (tx, rx) = mpsc::channel();
 	let svcopts = opts.clone();
-	thread::spawn(|| service::run(svcopts, data, rx));
+	let runopts = sub.clone();
+	thread::spawn(|| service::run(svcopts, runopts, data, sock, rx));
 
 	let listener = UnixListener::bind(path)?;
 	for stream in listener.incoming() {
@@ -247,6 +220,22 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 	rpc.expect_cmd(&[rpc::CMD_OK])?;
 
 	println!("{}", key);
+	Ok(())
+}
+
+fn cmd_delete(opts: &Options, sub: &DeleteOptions) -> Result<(), error::Error> {
+	let path = socket_path(&sub.path);
+	if !path.exists() {
+		return Ok(()); // no service running, nothing do delete
+	}
+
+	let stream = UnixStream::connect(path)?;
+	let mut rpc = rpc::RPC::new(stream)?;
+
+	rpc.write_cmd(&rpc::Operation::new_delete(&sub.key))?;
+	rpc.expect_cmd(&[rpc::CMD_OK])?;
+
+	println!("{}", &sub.key);
 	Ok(())
 }
 

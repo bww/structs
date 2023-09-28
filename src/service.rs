@@ -1,28 +1,55 @@
 use std::collections::BTreeMap;
 use std::sync::mpsc;
+use std::process;
 
 use colored::Colorize;
 use serde_json;
+use ctrlc;
 
 use crate::Options;
+use crate::RunOptions;
 use crate::error;
 use crate::rpc;
 use crate::jsonpath;
 
 use crate::rpc::CMD_GET;
 use crate::rpc::CMD_SET;
+use crate::rpc::CMD_DELETE;
 use crate::rpc::CMD_SHUTDOWN;
 
-pub fn run(opts: Options, mut data: BTreeMap<String, serde_json::Value>, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
+pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_json::Value>, mut sock: rpc::Socket, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
+	cleanup_on_signal(sock.clone());
+
 	loop {
 		let req = rx.recv()?;
 		match req.name().as_ref() {
 			CMD_GET 		 => run_get(&opts, &data, req)?,
 			CMD_SET 		 => run_set(&opts, &mut data, req)?,
-			CMD_SHUTDOWN => run_stop(&opts, &mut data, req)?,
-			cmd 				 => eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
+			CMD_DELETE	 => {
+				run_delete(&opts, &mut data, req)?;
+				if runopts.finalize && data.len() == 0 { break; }
+			},
+			CMD_SHUTDOWN => {
+				run_stop(&opts, req)?;
+				break;
+			},
+			cmd => eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
 		};
 	}
+
+	process::exit(match sock.cleanup() {
+		Ok(_)  => 0,
+		Err(_) => 1,
+	});
+}
+
+fn cleanup_on_signal(mut sock: rpc::Socket) {
+	ctrlc::set_handler(move || {
+		process::exit(match sock.cleanup() {
+			Ok(_)  => 0,
+			Err(_) => 1,
+		});
+	}).expect("Could not set signal handler");
 }
 
 fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
@@ -74,12 +101,25 @@ fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut 
 	Ok(())
 }
 
-fn run_stop(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
+fn run_delete(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
+	let cmd = req.operation();
+	if opts.debug {
+		println!(">>> {:?}", cmd);
+	}
+	if cmd.args().len() != 1 {
+		return Err(error::Error::Malformed);
+	}
+	store.remove(&cmd.args()[0]);
+	req.send(rpc::Operation::new_ok())?;
+	Ok(())
+}
+
+fn run_stop(opts: &Options,  mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
 		println!(">>> {:?}", cmd);
 	}
 	req.send(rpc::Operation::new_ok())?;
-	Err(error::Error::Shutdown)
+	Ok(())
 }
 

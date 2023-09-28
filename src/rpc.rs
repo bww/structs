@@ -1,5 +1,7 @@
 use std::io;
 use std::io::prelude::*;
+use std::fs;
+use std::path;
 
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc;
@@ -10,6 +12,7 @@ pub const CMD_SET: 	 		 &str = "set";
 pub const CMD_GET: 	 		 &str = "get";
 pub const CMD_FOUND: 		 &str = "found";
 pub const CMD_NONE:  		 &str = "none";
+pub const CMD_DELETE:  	 &str = "delete";
 pub const CMD_SHUTDOWN:  &str = "stop";
 pub const CMD_OK:  	 		 &str = "ok";
 
@@ -62,6 +65,10 @@ impl Operation {
 
 	pub fn new_set(name: &str, data: &str) -> Self {
 		Self::new(CMD_SET, &[name], Some(data))
+	}
+
+	pub fn new_delete(name: &str) -> Self {
+		Self::new(CMD_DELETE, &[name], None)
 	}
 
 	pub fn new_shutdown() -> Self {
@@ -189,6 +196,29 @@ impl RPC {
 		self.writer.write_all(b"\n")?;
 		self.writer.flush()?;
 		Ok(())
+	}
+}
+
+#[derive(Clone)]
+pub struct Socket {
+	path: path::PathBuf,
+}
+
+impl Socket {
+	pub fn new<P: AsRef<path::Path>>(path: P) -> Self {
+		Self{
+			path: path.as_ref().into(),
+		}
+	}
+
+	pub fn cleanup(&mut self) -> io::Result<()> {
+		fs::remove_file(&self.path)
+	}
+}
+
+impl Drop for Socket {
+	fn drop(&mut self) {
+		self.cleanup().expect("Could not remove socket");
 	}
 }
 
