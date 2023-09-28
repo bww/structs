@@ -1,6 +1,7 @@
+use std::time;
+use std::process;
 use std::collections::BTreeMap;
 use std::sync::mpsc;
-use std::process;
 
 use colored::Colorize;
 use serde_json;
@@ -19,9 +20,15 @@ use crate::rpc::CMD_SHUTDOWN;
 
 pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_json::Value>, mut sock: rpc::Socket, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
 	cleanup_on_signal(sock.clone());
+	let mut last_op = time::SystemTime::now();
 
 	loop {
 		let req = rx.recv()?;
+		if opts.debug && opts.verbose {
+			let now = time::SystemTime::now();
+			println!(">>> {:?} since last operation", last_op.elapsed()?);
+			last_op = now;
+		}
 		match req.name().as_ref() {
 			CMD_GET 		 => run_get(&opts, &data, req)?,
 			CMD_SET 		 => run_set(&opts, &mut data, req)?,

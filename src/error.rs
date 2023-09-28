@@ -1,5 +1,6 @@
 use std::io;
 use std::fmt;
+use std::time;
 use std::str;
 use std::string;
 use std::sync::mpsc;
@@ -12,6 +13,7 @@ pub enum Error {
   Utf8Error(str::Utf8Error),
   FromUtf8Error(string::FromUtf8Error),
   SerdeError(serde_json::Error),
+	SystemTimeError(time::SystemTimeError),
   SendError,
   RecvError(mpsc::RecvError),
   Malformed,
@@ -44,6 +46,12 @@ impl From<serde_json::Error> for Error {
   }
 }
 
+impl From<time::SystemTimeError> for Error {
+  fn from(err: time::SystemTimeError) -> Self {
+		Self::SystemTimeError(err)
+  }
+}
+
 impl From<mpsc::RecvError> for Error {
   fn from(err: mpsc::RecvError) -> Self {
 		Self::RecvError(err)
@@ -57,6 +65,7 @@ impl fmt::Display for Error {
       Self::Utf8Error(err) => err.fmt(f),
       Self::FromUtf8Error(err) => err.fmt(f),
       Self::SerdeError(err) => err.fmt(f),
+      Self::SystemTimeError(err) => err.fmt(f),
       Self::SendError => write!(f, "Could not send"),
       Self::RecvError(err) => err.fmt(f),
       Self::Malformed => write!(f, "Malformed"),

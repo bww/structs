@@ -223,7 +223,7 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 	Ok(())
 }
 
-fn cmd_delete(opts: &Options, sub: &DeleteOptions) -> Result<(), error::Error> {
+fn cmd_delete(_opts: &Options, sub: &DeleteOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
 	if !path.exists() {
 		return Ok(()); // no service running, nothing do delete
