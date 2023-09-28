@@ -6,11 +6,12 @@ use std::sync::mpsc;
 
 use crate::error;
 
-pub const CMD_SET: 	 &str = "set";
-pub const CMD_GET: 	 &str = "get";
-pub const CMD_FOUND: &str = "found";
-pub const CMD_NONE:  &str = "none";
-pub const CMD_OK:  	 &str = "ok";
+pub const CMD_SET: 	 		 &str = "set";
+pub const CMD_GET: 	 		 &str = "get";
+pub const CMD_FOUND: 		 &str = "found";
+pub const CMD_NONE:  		 &str = "none";
+pub const CMD_SHUTDOWN:  &str = "stop";
+pub const CMD_OK:  	 		 &str = "ok";
 
 #[derive(Debug)]
 pub struct Operation {
@@ -61,6 +62,10 @@ impl Operation {
 
 	pub fn new_set(name: &str, data: &str) -> Self {
 		Self::new(CMD_SET, &[name], Some(data))
+	}
+
+	pub fn new_shutdown() -> Self {
+		Self::new(CMD_SHUTDOWN, &[], None)
 	}
 }
 

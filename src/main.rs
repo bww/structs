@@ -3,6 +3,7 @@ use std::fs;
 use std::env;
 use std::str;
 use std::path;
+use std::time;
 use std::process;
 use std::io::Read;
 
@@ -46,6 +47,8 @@ enum Command {
   Fetch(FetchOptions),
   #[clap(name="set", about="Store a value in the service")]
   Store(StoreOptions),
+  #[clap(name="stop", about="Shutdown the service, if it is running")]
+  Shutdown(ShutdownOptions),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -68,6 +71,12 @@ struct StoreOptions {
   path: Option<String>,
   #[clap(help="The key to store the record under")]
   key: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct ShutdownOptions {
+  #[clap(long="socket", name="socket", help="The path to the server socket")]
+  path: Option<String>,
 }
 
 #[derive(Clone)]
@@ -109,13 +118,31 @@ fn main() {
   };
 }
 
+fn run_svc<P: AsRef<path::Path>>(opts: &Options, path: P) -> Result<(), error::Error> {
+	let me = env::current_exe()?;
+	if opts.debug {
+		eprintln!(">>> No service running; starting: {}", me.display());
+	}
+	process::Command::new(me).arg("run").spawn()?;
+	let mut dur = time::Duration::from_millis(10);
+	for _ in 0..10 {
+		thread::sleep(dur);
+		if path.as_ref().exists() {
+			return Ok(());
+		}
+		dur *= 10 // backoff
+	}
+	Err(error::Error::ServiceError)
+}
+
 fn cmd() -> Result<(), error::Error> {
   let opts = Options::parse();
 
   match &opts.command {
-		Command::Run(sub)   => cmd_run(&opts, sub),
-    Command::Fetch(sub) => cmd_get(&opts, sub),
-    Command::Store(sub) => cmd_set(&opts, sub),
+		Command::Run(sub)			 => cmd_run(&opts, sub),
+    Command::Fetch(sub)		 => cmd_get(&opts, sub),
+    Command::Store(sub)		 => cmd_set(&opts, sub),
+    Command::Shutdown(sub) => cmd_stop(&opts, sub),
   }?;
 
   Ok(())
@@ -158,11 +185,25 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 	Ok(())
 }
 
-fn cmd_get(_opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
+fn cmd_stop(_opts: &Options, sub: &ShutdownOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
 	if !path.exists() {
-		println!(">>> NO SERVICE RUNNING (start one?)");
-		return Ok(());
+		return Ok(()); // no service running, nothing to stop
+	}
+
+	let stream = UnixStream::connect(path)?;
+	let mut rpc = rpc::RPC::new(stream)?;
+
+	rpc.write_cmd(&rpc::Operation::new_shutdown())?;
+	rpc.expect_cmd(&[rpc::CMD_OK])?;
+
+	Ok(())
+}
+
+fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
+	let path = socket_path(&sub.path);
+	if !path.exists() {
+		run_svc(opts, &path)?;
 	}
 
 	let stream = UnixStream::connect(path)?;
@@ -184,18 +225,17 @@ fn cmd_get(_opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	Ok(())
 }
 
-fn cmd_set(_opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
+fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
 	if !path.exists() {
-		println!(">>> NO SERVICE RUNNING (start one?)");
-		return Ok(());
+		run_svc(opts, &path)?;
 	}
 
 	let stream = UnixStream::connect(path)?;
 	let mut rpc = rpc::RPC::new(stream)?;
 	let key = match &sub.key {
 		Some(key) => key.to_string(),
-		None 			=> Alphanumeric.sample_string(&mut rand::thread_rng(), 16),
+		None			=> Alphanumeric.sample_string(&mut rand::thread_rng(), 16),
 	};
 
 	let mut data = String::new();

@@ -11,14 +11,16 @@ use crate::jsonpath;
 
 use crate::rpc::CMD_GET;
 use crate::rpc::CMD_SET;
+use crate::rpc::CMD_SHUTDOWN;
 
 pub fn run(opts: Options, mut data: BTreeMap<String, serde_json::Value>, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
 	loop {
 		let req = rx.recv()?;
 		match req.name().as_ref() {
-			CMD_GET => run_get(&opts, &data, req)?,
-			CMD_SET => run_set(&opts, &mut data, req)?,
-			cmd 		=> eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
+			CMD_GET 		 => run_get(&opts, &data, req)?,
+			CMD_SET 		 => run_set(&opts, &mut data, req)?,
+			CMD_SHUTDOWN => run_stop(&opts, &mut data, req)?,
+			cmd 				 => eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
 		};
 	}
 }
@@ -71,3 +73,13 @@ fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut 
 	req.send(rpc::Operation::new_ok())?;
 	Ok(())
 }
+
+fn run_stop(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
+	let cmd = req.operation();
+	if opts.debug {
+		println!(">>> {:?}", cmd);
+	}
+	req.send(rpc::Operation::new_ok())?;
+	Err(error::Error::Shutdown)
+}
+
