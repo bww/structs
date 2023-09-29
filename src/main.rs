@@ -22,6 +22,7 @@ mod error;
 mod rpc;
 mod service;
 mod client;
+mod duration;
 mod jsonpath;
 
 const _VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -53,6 +54,8 @@ enum Command {
 
 #[derive(Args, Debug, Clone)]
 pub struct RunOptions {
+  #[clap(long="timeout", help="Shut down the service after the last entry is deleted")]
+  pub timeout: Option<duration::Duration>,
   #[clap(long="finalize", help="Shut down the service after the last entry is deleted")]
   pub finalize: bool,
   #[clap(long="socket", name="socket", help="The path to the server socket")]
@@ -104,7 +107,7 @@ fn run_svc<P: AsRef<path::Path>>(opts: &Options, path: P) -> Result<(), error::E
 	if opts.debug {
 		eprintln!(">>> No service running; starting: {}", me.display());
 	}
-	process::Command::new(me).arg("run").spawn()?;
+	process::Command::new(me).arg("run").arg("--finalize").spawn()?;
 	let mut dur = time::Duration::from_millis(1);
 	for _ in 0..5 {
 		thread::sleep(dur);

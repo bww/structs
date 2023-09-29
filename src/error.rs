@@ -7,6 +7,8 @@ use std::sync::mpsc;
 
 use serde_json;
 
+use crate::duration;
+
 #[derive(Debug)]
 pub enum Error {
   IOError(io::Error),
@@ -14,6 +16,7 @@ pub enum Error {
   FromUtf8Error(string::FromUtf8Error),
   SerdeError(serde_json::Error),
 	SystemTimeError(time::SystemTimeError),
+	DurationError(duration::Error),
   SendError,
   RecvError(mpsc::RecvError),
   Malformed,
@@ -58,6 +61,12 @@ impl From<mpsc::RecvError> for Error {
   }
 }
 
+impl From<duration::Error> for Error {
+  fn from(err: duration::Error) -> Self {
+		Self::DurationError(err)
+  }
+}
+
 impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
@@ -66,7 +75,8 @@ impl fmt::Display for Error {
       Self::FromUtf8Error(err) => err.fmt(f),
       Self::SerdeError(err) => err.fmt(f),
       Self::SystemTimeError(err) => err.fmt(f),
-      Self::SendError => write!(f, "Could not send"),
+			Self::DurationError(err) => err.fmt(f),
+			Self::SendError => write!(f, "Could not send"),
       Self::RecvError(err) => err.fmt(f),
       Self::Malformed => write!(f, "Malformed"),
       Self::Unexpected => write!(f, "Unexpected"),
