@@ -23,5 +23,14 @@ for i in $(structs range ${key}.data); do
 done
 ```
 
+Will yield something like:
+
+```
+Size S: Small
+Size M: Medium
+Size L: Large
+...
+```
+
 Recent versions of Bash and Zsh support indexed and associative arrays, however neither excels at the common use case of interacting with structured data from an external source. Most likely, this pattern will involve repeatedly processing and parsing JSON strings to extract each field of interest and use it. Far from ideal.
 
