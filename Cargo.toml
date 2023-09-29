@@ -1,11 +1,15 @@
 [package]
-name = "structs"
+name = "structs-sh"
 version = "0.1.0"
 edition = "2021"
 description = "A local data structure service"
 repository = "https://github.com/bww/structs"
 readme = "README.md"
 license = "BSD-3-Clause"
+
+[[bin]]
+name = "structs"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version="3.1", features=["derive"] }
