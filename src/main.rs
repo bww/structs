@@ -54,8 +54,8 @@ enum Command {
 
 #[derive(Args, Debug, Clone)]
 pub struct RunOptions {
-  #[clap(long="timeout", help="Shut down the service after the last entry is deleted")]
-  pub timeout: Option<duration::Duration>,
+  #[clap(long="timeout", default_value="1m", help="Shut down the service after the last entry is deleted")]
+  pub timeout: duration::Duration,
   #[clap(long="finalize", help="Shut down the service after the last entry is deleted")]
   pub finalize: bool,
   #[clap(long="socket", name="socket", help="The path to the server socket")]

@@ -31,21 +31,24 @@ fn cleanup_on_signal(opts: Options, mut sock: rpc::Socket) {
 	}).expect("Could not set signal handler");
 }
 
-fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) -> Result<mpsc::Sender<time::Duration>, error::Error> {
+fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) -> Result<mpsc::Sender<()>, error::Error> {
+	if opts.debug {
+		println!(">>> Idle timeout: {:?}", &dur);
+	}
+	let mut last_op = time::SystemTime::now();
 	let (tx, rx) = mpsc::channel();
 	thread::spawn(move || {
 		loop {
-			println!(">>> HOW WE DOIN?");
-			match rx.recv_timeout(dur) {
-				Ok(when) => println!(">>> POLL: {:?}", when),
-				Err(err) => match err {
+			if let Err(err) = rx.recv_timeout(dur) {
+				match err {
 					mpsc::RecvTimeoutError::Timeout => break,  // timeout exceeded, clean up
 					_          										  => return, // channel ended, just return
-				},
+				}
 			}
+			last_op = time::SystemTime::now();
 		}
 		if opts.debug || opts.verbose {
-			println!(">>> Shutting down due to idle timeout...");
+			println!(">>> Shutting down after {:?} of inactivity...", last_op.elapsed().unwrap());
 		}
 		process::exit(match sock.cleanup() {
 			Ok(_)  => 0,
@@ -57,16 +60,10 @@ fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) ->
 
 pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_json::Value>, mut sock: rpc::Socket, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
 	cleanup_on_signal(opts.clone(), sock.clone());
-	let poll_tx = cleanup_on_idle(opts.clone(), sock.clone(), time::Duration::from_secs(10))?;
-	let mut last_op = time::SystemTime::now();
+	let poll_tx = cleanup_on_idle(opts.clone(), sock.clone(), runopts.timeout.duration())?;
 
 	loop {
 		let req = rx.recv()?;
-		if opts.debug && opts.verbose {
-			let now = time::SystemTime::now();
-			println!(">>> {:?} since last operation", last_op.elapsed()?);
-			last_op = now;
-		}
 		match req.name().as_ref() {
 			CMD_GET 		 => run_get(&opts, &data, req)?,
 			CMD_SET 		 => run_set(&opts, &mut data, req)?,
@@ -80,7 +77,7 @@ pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_
 			},
 			cmd => eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
 		};
-		if let Err(err) = poll_tx.send(last_op.elapsed()?) {
+		if let Err(err) = poll_tx.send(()) {
 			eprintln!("{}", &format!("* * * Could not poll: {}", err).yellow().bold());
 		}
 	}

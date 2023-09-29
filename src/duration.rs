@@ -40,8 +40,8 @@ impl fmt::Display for Error {
 pub struct Duration(time::Duration);
 
 impl Duration {
-	pub fn duration<'a>(&'a self) -> &'a time::Duration {
-		&self.0
+	pub fn duration(&self) -> time::Duration {
+		self.0
 	}
 }
 
