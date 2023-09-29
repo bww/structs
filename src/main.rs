@@ -44,6 +44,8 @@ enum Command {
   Run(RunOptions),
   #[clap(name="get", about="Query a value from the service")]
   Fetch(FetchOptions),
+  #[clap(name="range", about="Range over an array or object value from the service")]
+  Range(RangeOptions),
   #[clap(name="set", about="Store a value in the service")]
   Store(StoreOptions),
   #[clap(name="rm", about="Delete a value from the service")]
@@ -64,6 +66,14 @@ pub struct RunOptions {
 
 #[derive(Args, Debug, Clone)]
 struct FetchOptions {
+  #[clap(long="socket", name="socket", help="The path to the server socket")]
+  path: Option<String>,
+  #[clap(help="The key to fetch the record from")]
+  key: String,
+}
+
+#[derive(Args, Debug, Clone)]
+struct RangeOptions {
   #[clap(long="socket", name="socket", help="The path to the server socket")]
   path: Option<String>,
   #[clap(help="The key to fetch the record from")]
@@ -125,6 +135,7 @@ fn cmd() -> Result<(), error::Error> {
   match &opts.command {
 		Command::Run(sub)			 => cmd_run(&opts, sub),
     Command::Fetch(sub)		 => cmd_get(&opts, sub),
+    Command::Range(sub)		 => cmd_range(&opts, sub),
     Command::Store(sub)		 => cmd_set(&opts, sub),
     Command::Delete(sub)	 => cmd_delete(&opts, sub),
     Command::Shutdown(sub) => cmd_stop(&opts, sub),
@@ -198,6 +209,36 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 	}?;
 
 	println!("{}", data);
+	Ok(())
+}
+
+fn cmd_range(opts: &Options, sub: &RangeOptions) -> Result<(), error::Error> {
+	let path = socket_path(&sub.path);
+	if !path.exists() {
+		run_svc(opts, &path)?;
+	}
+
+	let stream = UnixStream::connect(path)?;
+	let mut rpc = rpc::RPC::new(stream)?;
+
+	rpc.write_cmd(&rpc::Operation::new_range(&sub.key))?;
+
+	let rsp = rpc.expect_cmd(&[rpc::CMD_FOUND, rpc::CMD_NONE])?;
+	let data = match rsp.name() {
+		rpc::CMD_NONE  => Err(error::Error::NotFound),
+		rpc::CMD_FOUND => match rsp.data() {
+			Some(data) => Ok(data),
+			None			 => Err(error::Error::Malformed),
+		},
+		_ => Err(error::Error::Malformed),
+	}?;
+
+	let value: serde_json::Value = serde_json::from_str(&data)?;
+	let data = match value {
+		serde_json::Value::Array(v) => v.iter().for_each(|e| { println!("{}", jsonpath::print_raw(e)) }),
+		_														=> return Err(error::Error::Malformed),
+	};
+
 	Ok(())
 }
 

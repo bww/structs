@@ -145,12 +145,21 @@ fn run_range(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut re
 		return Err(error::Error::Malformed);
 	}
 	let name = cmd.args()[0].to_string();
-	match fetch(store, &name) {
-		Ok(data) => req.send(rpc::Operation::new_found(&name, &data.to_string()))?,
+	let data = match fetch(store, &name) {
+		Ok(data) => data,
 		Err(err) => match err {
-			error::Error::NotFound => req.send(rpc::Operation::new_none(&name))?,
+			error::Error::NotFound => return req.send(rpc::Operation::new_none(&name)),
 			_											 => return Err(err),
 		},
+	};
+	let range = match data {
+		serde_json::Value::Array(v)  => Some((0..v.len()).map(|e| { serde_json::Value::Number(e.into()) }).collect::<Vec<serde_json::Value>>()),
+		serde_json::Value::Object(v) => Some(v.keys().map(|e| { serde_json::Value::String(e.to_string()) }).collect::<Vec<serde_json::Value>>()),
+		_														 => None,
+	};
+	match range {
+		Some(range) => req.send(rpc::Operation::new_found(&name, &serde_json::Value::Array(range).to_string()))?,
+		None			 	=> req.send(rpc::Operation::new_none(&name))?,
 	}
 	Ok(())
 }

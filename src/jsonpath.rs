@@ -61,6 +61,17 @@ impl Path {
 	}
 }
 
+pub fn print_raw<'a>(value: &'a Value) -> String {
+	match value {
+		Value::Null 		 => "null".to_string(),
+		Value::Bool(v) 	 => format!("{}", v),
+		Value::Number(v) => format!("{}", v),
+		Value::String(v) => format!("{}", v),
+		Value::Array(v)  => format!("{:?}", v),
+		Value::Object(v) => format!("{:?}", v),
+	}
+}
+
 fn json_deref<'a>(name: &str, value: &'a Value) -> Option<&'a Value> {
 	match value {
 		Value::Null 		 => None,
