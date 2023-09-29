@@ -10,6 +10,7 @@ use crate::error;
 
 pub const CMD_SET: 	 		 &str = "set";
 pub const CMD_GET: 	 		 &str = "get";
+pub const CMD_RANGE: 	 	 &str = "range";
 pub const CMD_FOUND: 		 &str = "found";
 pub const CMD_NONE:  		 &str = "none";
 pub const CMD_DELETE:  	 &str = "delete";
@@ -61,6 +62,10 @@ impl Operation {
 
 	pub fn new_get(name: &str) -> Self {
 		Self::new(CMD_GET, &[name], None)
+	}
+
+	pub fn new_range(name: &str) -> Self {
+		Self::new(CMD_RANGE, &[name], None)
 	}
 
 	pub fn new_set(name: &str, data: &str) -> Self {

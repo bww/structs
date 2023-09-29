@@ -15,6 +15,7 @@ use crate::rpc;
 use crate::jsonpath;
 
 use crate::rpc::CMD_GET;
+use crate::rpc::CMD_RANGE;
 use crate::rpc::CMD_SET;
 use crate::rpc::CMD_DELETE;
 use crate::rpc::CMD_SHUTDOWN;
@@ -66,6 +67,7 @@ pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_
 		let req = rx.recv()?;
 		match req.name().as_ref() {
 			CMD_GET 		 => run_get(&opts, &data, req)?,
+			CMD_RANGE 	 => run_range(&opts, &data, req)?,
 			CMD_SET 		 => run_set(&opts, &mut data, req)?,
 			CMD_DELETE	 => {
 				run_delete(&opts, &mut data, req)?;
@@ -91,15 +93,8 @@ pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_
 	});
 }
 
-fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
-	let cmd = req.operation();
-	if opts.debug {
-		println!(">>> {:?}", cmd);
-	}
-	if cmd.args().len() != 1 {
-		return Err(error::Error::Malformed);
-	}
-	let jp = jsonpath::Path::new(&cmd.args()[0]);
+fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Result<&'a serde_json::Value, error::Error> {
+	let jp = jsonpath::Path::new(key);
 	let (name, path) = jp.next();
 	let name = match name {
 		Some(name) => name,
@@ -114,11 +109,48 @@ fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req:
 		(None, None)
 	};
 	match rest {
-		Some(_) => req.send(rpc::Operation::new_none(name))?,
+		Some(_) => Err(error::Error::NotFound),
 		None 		=> match data { 
-			Some(data) => req.send(rpc::Operation::new_found(name, &data.to_string()))?,
-			None			 => req.send(rpc::Operation::new_none(name))?,
+			Some(data) => Ok(data),
+			None			 => Err(error::Error::NotFound),
 		}
+	}
+}
+
+fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
+	let cmd = req.operation();
+	if opts.debug {
+		println!(">>> {:?}", cmd);
+	}
+	if cmd.args().len() != 1 {
+		return Err(error::Error::Malformed);
+	}
+	let name = cmd.args()[0].to_string();
+	match fetch(store, &name) {
+		Ok(data) => req.send(rpc::Operation::new_found(&name, &data.to_string()))?,
+		Err(err) => match err {
+			error::Error::NotFound => req.send(rpc::Operation::new_none(&name))?,
+			_											 => return Err(err),
+		},
+	}
+	Ok(())
+}
+
+fn run_range(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
+	let cmd = req.operation();
+	if opts.debug {
+		println!(">>> {:?}", cmd);
+	}
+	if cmd.args().len() != 1 {
+		return Err(error::Error::Malformed);
+	}
+	let name = cmd.args()[0].to_string();
+	match fetch(store, &name) {
+		Ok(data) => req.send(rpc::Operation::new_found(&name, &data.to_string()))?,
+		Err(err) => match err {
+			error::Error::NotFound => req.send(rpc::Operation::new_none(&name))?,
+			_											 => return Err(err),
+		},
 	}
 	Ok(())
 }
