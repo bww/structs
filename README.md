@@ -3,12 +3,13 @@ _Structs_ endeavors to provide a missing capability in shell scripting: working 
 
 ```json
 {
-    "page" {...},
+    "page": {...},
     "data": [
         {
-            "size": "M",
-            "name": "Medium"
-        }
+            "size": "S",
+            "name": "Small"
+        },
+        ...
     ]
 }
 ```
@@ -18,7 +19,7 @@ Given this API response, we can use Structs to process our data:
 ```sh
 key=$(curl -sSL 'https://api.website.com/widgets/sizes' | structs set)
 for i in $(structs range ${key}.data); do
-    echo "Size $(structs get ${key}.data[$i].size): $(structs get ${key}.data[$i].name)"
+  echo "Size $(structs get -r ${key}.data.${i}.size): $(structs get -r ${key}.data.${i}.name)"
 done
 ```
 
