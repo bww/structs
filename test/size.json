@@ -1,0 +1,18 @@
+{
+    "page": {},
+    "data": [
+        {
+            "size": "S",
+            "name": "Small"
+        },
+        {
+            "size": "M",
+            "name": "Medium"
+        },
+        {
+            "size": "L",
+            "name": "Large"
+        }
+    ]
+}
+
