@@ -67,8 +67,8 @@ pub fn print_raw<'a>(value: &'a Value) -> String {
 		Value::Bool(v) 	 => format!("{}", v),
 		Value::Number(v) => format!("{}", v),
 		Value::String(v) => format!("{}", v),
-		Value::Array(v)  => format!("{:?}", v),
-		Value::Object(v) => format!("{:?}", v),
+		Value::Array(_)  => value.to_string(),
+		Value::Object(_) => value.to_string(),
 	}
 }
 
@@ -78,8 +78,15 @@ fn json_deref<'a>(name: &str, value: &'a Value) -> Option<&'a Value> {
 		Value::Bool(_) 	 => None,
 		Value::Number(_) => None,
 		Value::String(_) => None,
-		Value::Array(_)  => None,
 		Value::Object(v) => v.get(name),
+		Value::Array(v)  => match name.parse::<usize>() {
+			Ok(i) => if i < v.len() {
+				Some(&v[i])
+			} else {
+				None
+			},
+			Err(_) => None,
+		},
 	}
 }
 

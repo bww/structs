@@ -70,6 +70,8 @@ struct FetchOptions {
   path: Option<String>,
   #[clap(help="The key to fetch the record from")]
   key: String,
+  #[clap(long="raw", short='r', name="raw", help="Print the raw value, instaed of JSON")]
+  raw: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -208,7 +210,11 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
 		_ => Err(error::Error::Malformed),
 	}?;
 
-	println!("{}", data);
+	if sub.raw {
+		println!("{}", &jsonpath::print_raw(&serde_json::from_str::<serde_json::Value>(&data)?));
+	}else{
+		println!("{}", data);
+	}
 	Ok(())
 }
 
@@ -234,10 +240,10 @@ fn cmd_range(opts: &Options, sub: &RangeOptions) -> Result<(), error::Error> {
 	}?;
 
 	let value: serde_json::Value = serde_json::from_str(&data)?;
-	let data = match value {
+	match value {
 		serde_json::Value::Array(v) => v.iter().for_each(|e| { println!("{}", jsonpath::print_raw(e)) }),
 		_														=> return Err(error::Error::Malformed),
-	};
+	}
 
 	Ok(())
 }
