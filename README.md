@@ -9,6 +9,14 @@ _Structs_ endeavors to provide a missing capability in shell scripting: working 
             "size": "S",
             "name": "Small"
         },
+        {
+            "size": "M",
+            "name": "Medium"
+        },
+        {
+            "size": "L",
+            "name": "Large"
+        },
         ...
     ]
 }
@@ -23,7 +31,7 @@ for i in $(structs range ${key}.data); do
 done
 ```
 
-Will yield something like:
+Which will yield something like:
 
 ```
 Size S: Small

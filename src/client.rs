@@ -29,7 +29,7 @@ fn handle(opts: &Options, stream: UnixStream, tx: mpsc::Sender<rpc::Request>) ->
 		};
 		let rsp = rsp_rx.recv()?;
 		if opts.debug {
-			println!("<<< {:?}", &rsp);
+			eprintln!("<<< {:?}", &rsp);
 		}
 		rpc.write_cmd(&rsp)?;
 	}

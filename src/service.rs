@@ -23,7 +23,7 @@ use crate::rpc::CMD_SHUTDOWN;
 fn cleanup_on_signal(opts: Options, mut sock: rpc::Socket) {
 	ctrlc::set_handler(move || {
 		if opts.debug || opts.verbose {
-			println!(">>> Shutting down due to signal...");
+			eprintln!(">>> Shutting down due to signal...");
 		}
 		process::exit(match sock.cleanup() {
 			Ok(_)  => 0,
@@ -34,7 +34,7 @@ fn cleanup_on_signal(opts: Options, mut sock: rpc::Socket) {
 
 fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) -> Result<mpsc::Sender<()>, error::Error> {
 	if opts.debug {
-		println!(">>> Idle timeout: {:?}", &dur);
+		eprintln!(">>> Idle timeout: {:?}", &dur);
 	}
 	let mut last_op = time::SystemTime::now();
 	let (tx, rx) = mpsc::channel();
@@ -49,7 +49,7 @@ fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) ->
 			last_op = time::SystemTime::now();
 		}
 		if opts.debug || opts.verbose {
-			println!(">>> Shutting down after {:?} of inactivity...", last_op.elapsed().unwrap());
+			eprintln!(">>> Shutting down after {:?} of inactivity...", last_op.elapsed().unwrap());
 		}
 		process::exit(match sock.cleanup() {
 			Ok(_)  => 0,
@@ -61,7 +61,10 @@ fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) ->
 
 pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_json::Value>, mut sock: rpc::Socket, rx: mpsc::Receiver<rpc::Request>) -> Result<(), error::Error> {
 	cleanup_on_signal(opts.clone(), sock.clone());
-	let poll_tx = cleanup_on_idle(opts.clone(), sock.clone(), runopts.timeout.duration())?;
+	let poll_tx = match runopts.timeout {
+		Some(dur) => Some(cleanup_on_idle(opts.clone(), sock.clone(), dur.duration())?),
+		None => None,
+	};
 
 	loop {
 		let req = rx.recv()?;
@@ -79,13 +82,15 @@ pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_
 			},
 			cmd => eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
 		};
-		if let Err(err) = poll_tx.send(()) {
-			eprintln!("{}", &format!("* * * Could not poll: {}", err).yellow().bold());
+		if let Some(poll_tx) = &poll_tx {
+			if let Err(err) = poll_tx.send(()) {
+				eprintln!("{}", &format!("* * * Could not poll: {}", err).yellow().bold());
+			}
 		}
 	}
 
 	if opts.debug || opts.verbose {
-		println!(">>> Shutting down due to finalization...");
+		eprintln!(">>> Shutting down due to finalization...");
 	}
 	process::exit(match sock.cleanup() {
 		Ok(_)  => 0,
@@ -120,7 +125,7 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
 fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
-		println!(">>> {:?}", cmd);
+		eprintln!(">>> {:?}", cmd);
 	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
@@ -139,7 +144,7 @@ fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req:
 fn run_range(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
-		println!(">>> {:?}", cmd);
+		eprintln!(">>> {:?}", cmd);
 	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
@@ -167,7 +172,7 @@ fn run_range(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut re
 fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
-		println!(">>> {:?}", cmd);
+		eprintln!(">>> {:?}", cmd);
 	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
@@ -184,7 +189,7 @@ fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut 
 fn run_delete(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
-		println!(">>> {:?}", cmd);
+		eprintln!(">>> {:?}", cmd);
 	}
 	if cmd.args().len() != 1 {
 		return Err(error::Error::Malformed);
@@ -197,7 +202,7 @@ fn run_delete(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, m
 fn run_stop(opts: &Options,  mut req: rpc::Request) -> Result<(), error::Error> {
 	let cmd = req.operation();
 	if opts.debug {
-		println!(">>> {:?}", cmd);
+		eprintln!(">>> {:?}", cmd);
 	}
 	req.send(rpc::Operation::new_ok())?;
 	Ok(())

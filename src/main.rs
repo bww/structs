@@ -56,8 +56,8 @@ enum Command {
 
 #[derive(Args, Debug, Clone)]
 pub struct RunOptions {
-  #[clap(long="timeout", default_value="1m", help="Shut down the service after the last entry is deleted")]
-  pub timeout: duration::Duration,
+  #[clap(long="timeout", help="Shut down the service after the last entry is deleted")]
+  pub timeout: Option<duration::Duration>,
   #[clap(long="finalize", help="Shut down the service after the last entry is deleted")]
   pub finalize: bool,
   #[clap(long="socket", name="socket", help="The path to the server socket")]
@@ -119,7 +119,12 @@ fn run_svc<P: AsRef<path::Path>>(opts: &Options, path: P) -> Result<(), error::E
 	if opts.debug {
 		eprintln!(">>> No service running; starting: {}", me.display());
 	}
-	process::Command::new(me).arg("run").arg("--finalize").spawn()?;
+	process::Command::new(me)
+		.arg("run").arg("--finalize").arg("--timeout").arg("1m")
+		.stdin(process::Stdio::null())
+		.stdout(process::Stdio::null())
+		.stderr(process::Stdio::null())
+		.spawn()?;
 	let mut dur = time::Duration::from_millis(1);
 	for _ in 0..5 {
 		thread::sleep(dur);
@@ -150,7 +155,9 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
 	let path = socket_path(&sub.path);
 	let sock = rpc::Socket::new(&path);
 	let path = path.as_path();
-	println!("==> Listening on: {}", path.display());
+	if opts.debug {
+		eprintln!("==> Listening on: {}", path.display());
+	}
 
 	let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
 	let (tx, rx) = mpsc::channel();
