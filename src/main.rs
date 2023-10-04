@@ -115,36 +115,36 @@ fn main() {
 }
 
 fn run_svc<P: AsRef<path::Path>>(opts: &Options, path: P) -> Result<(), error::Error> {
-	let me = env::current_exe()?;
-	if opts.debug {
-		eprintln!(">>> No service running; starting: {}", me.display());
-	}
-	process::Command::new(me)
-		.arg("run").arg("--finalize").arg("--timeout").arg("1m")
-		.stdin(process::Stdio::null())
-		.stdout(process::Stdio::null())
-		.stderr(process::Stdio::null())
-		.spawn()?;
-	let mut dur = time::Duration::from_millis(1);
-	for _ in 0..5 {
-		thread::sleep(dur);
-		if path.as_ref().exists() {
-			return Ok(());
-		}
-		dur *= 10 // backoff
-	}
-	Err(error::Error::ServiceError)
+  let me = env::current_exe()?;
+  if opts.debug {
+    eprintln!(">>> No service running; starting: {}", me.display());
+  }
+  process::Command::new(me)
+    .arg("run").arg("--finalize").arg("--timeout").arg("1m")
+    .stdin(process::Stdio::null())
+    .stdout(process::Stdio::null())
+    .stderr(process::Stdio::null())
+    .spawn()?;
+  let mut dur = time::Duration::from_millis(1);
+  for _ in 0..5 {
+    thread::sleep(dur);
+    if path.as_ref().exists() {
+      return Ok(());
+    }
+    dur *= 10 // backoff
+  }
+  Err(error::Error::ServiceError)
 }
 
 fn cmd() -> Result<(), error::Error> {
   let opts = Options::parse();
 
   match &opts.command {
-		Command::Run(sub)			 => cmd_run(&opts, sub),
-    Command::Fetch(sub)		 => cmd_get(&opts, sub),
-    Command::Range(sub)		 => cmd_range(&opts, sub),
-    Command::Store(sub)		 => cmd_set(&opts, sub),
-    Command::Delete(sub)	 => cmd_delete(&opts, sub),
+    Command::Run(sub)      => cmd_run(&opts, sub),
+    Command::Fetch(sub)    => cmd_get(&opts, sub),
+    Command::Range(sub)    => cmd_range(&opts, sub),
+    Command::Store(sub)    => cmd_set(&opts, sub),
+    Command::Delete(sub)   => cmd_delete(&opts, sub),
     Command::Shutdown(sub) => cmd_stop(&opts, sub),
   }?;
 
@@ -152,157 +152,157 @@ fn cmd() -> Result<(), error::Error> {
 }
 
 fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
-	let path = socket_path(&sub.path);
-	let sock = rpc::Socket::new(&path);
-	let path = path.as_path();
-	if opts.debug {
-		eprintln!("==> Listening on: {}", path.display());
-	}
+  let path = socket_path(&sub.path);
+  let sock = rpc::Socket::new(&path);
+  let path = path.as_path();
+  if opts.debug {
+    eprintln!("==> Listening on: {}", path.display());
+  }
 
-	let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
-	let (tx, rx) = mpsc::channel();
-	let svcopts = opts.clone();
-	let runopts = sub.clone();
-	thread::spawn(|| service::run(svcopts, runopts, data, sock, rx));
+  let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();
+  let (tx, rx) = mpsc::channel();
+  let svcopts = opts.clone();
+  let runopts = sub.clone();
+  thread::spawn(|| service::run(svcopts, runopts, data, sock, rx));
 
-	let listener = UnixListener::bind(path)?;
-	for stream in listener.incoming() {
-		match stream {
-			Ok(stream) => {
-				let tx = tx.clone();
-				let cliopts = opts.clone();
-				thread::spawn(|| client::run(cliopts, stream, tx));
-			}
-			Err(_) => {
-				break;
-			}
-		}
-	}
-	Ok(())
+  let listener = UnixListener::bind(path)?;
+  for stream in listener.incoming() {
+    match stream {
+      Ok(stream) => {
+        let tx = tx.clone();
+        let cliopts = opts.clone();
+        thread::spawn(|| client::run(cliopts, stream, tx));
+      }
+      Err(_) => {
+        break;
+      }
+    }
+  }
+  Ok(())
 }
 
 fn cmd_stop(_opts: &Options, sub: &ShutdownOptions) -> Result<(), error::Error> {
-	let path = socket_path(&sub.path);
-	if !path.exists() {
-		return Ok(()); // no service running, nothing to stop
-	}
+  let path = socket_path(&sub.path);
+  if !path.exists() {
+    return Ok(()); // no service running, nothing to stop
+  }
 
-	let stream = UnixStream::connect(path)?;
-	let mut rpc = rpc::RPC::new(stream)?;
+  let stream = UnixStream::connect(path)?;
+  let mut rpc = rpc::RPC::new(stream)?;
 
-	rpc.write_cmd(&rpc::Operation::new_shutdown())?;
-	rpc.expect_cmd(&[rpc::CMD_OK])?;
+  rpc.write_cmd(&rpc::Operation::new_shutdown())?;
+  rpc.expect_cmd(&[rpc::CMD_OK])?;
 
-	Ok(())
+  Ok(())
 }
 
 fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
-	let path = socket_path(&sub.path);
-	if !path.exists() {
-		run_svc(opts, &path)?;
-	}
+  let path = socket_path(&sub.path);
+  if !path.exists() {
+    run_svc(opts, &path)?;
+  }
 
-	let stream = UnixStream::connect(path)?;
-	let mut rpc = rpc::RPC::new(stream)?;
+  let stream = UnixStream::connect(path)?;
+  let mut rpc = rpc::RPC::new(stream)?;
 
-	rpc.write_cmd(&rpc::Operation::new_get(&sub.key))?;
+  rpc.write_cmd(&rpc::Operation::new_get(&sub.key))?;
 
-	let rsp = rpc.expect_cmd(&[rpc::CMD_FOUND, rpc::CMD_NONE])?;
-	let data = match rsp.name() {
-		rpc::CMD_NONE  => Err(error::Error::NotFound),
-		rpc::CMD_FOUND => match rsp.data() {
-			Some(data) => Ok(data),
-			None			 => Err(error::Error::Malformed),
-		},
-		_ => Err(error::Error::Malformed),
-	}?;
+  let rsp = rpc.expect_cmd(&[rpc::CMD_FOUND, rpc::CMD_NONE])?;
+  let data = match rsp.name() {
+    rpc::CMD_NONE  => Err(error::Error::NotFound),
+    rpc::CMD_FOUND => match rsp.data() {
+      Some(data) => Ok(data),
+      None       => Err(error::Error::Malformed),
+    },
+    _ => Err(error::Error::Malformed),
+  }?;
 
-	if sub.raw {
-		println!("{}", &jsonpath::print_raw(&serde_json::from_str::<serde_json::Value>(&data)?));
-	}else{
-		println!("{}", data);
-	}
-	Ok(())
+  if sub.raw {
+    println!("{}", &jsonpath::print_raw(&serde_json::from_str::<serde_json::Value>(&data)?));
+  }else{
+    println!("{}", data);
+  }
+  Ok(())
 }
 
 fn cmd_range(opts: &Options, sub: &RangeOptions) -> Result<(), error::Error> {
-	let path = socket_path(&sub.path);
-	if !path.exists() {
-		run_svc(opts, &path)?;
-	}
+  let path = socket_path(&sub.path);
+  if !path.exists() {
+    run_svc(opts, &path)?;
+  }
 
-	let stream = UnixStream::connect(path)?;
-	let mut rpc = rpc::RPC::new(stream)?;
+  let stream = UnixStream::connect(path)?;
+  let mut rpc = rpc::RPC::new(stream)?;
 
-	rpc.write_cmd(&rpc::Operation::new_range(&sub.key))?;
+  rpc.write_cmd(&rpc::Operation::new_range(&sub.key))?;
 
-	let rsp = rpc.expect_cmd(&[rpc::CMD_FOUND, rpc::CMD_NONE])?;
-	let data = match rsp.name() {
-		rpc::CMD_NONE  => Err(error::Error::NotFound),
-		rpc::CMD_FOUND => match rsp.data() {
-			Some(data) => Ok(data),
-			None			 => Err(error::Error::Malformed),
-		},
-		_ => Err(error::Error::Malformed),
-	}?;
+  let rsp = rpc.expect_cmd(&[rpc::CMD_FOUND, rpc::CMD_NONE])?;
+  let data = match rsp.name() {
+    rpc::CMD_NONE  => Err(error::Error::NotFound),
+    rpc::CMD_FOUND => match rsp.data() {
+      Some(data) => Ok(data),
+      None       => Err(error::Error::Malformed),
+    },
+    _ => Err(error::Error::Malformed),
+  }?;
 
-	let value: serde_json::Value = serde_json::from_str(&data)?;
-	match value {
-		serde_json::Value::Array(v) => v.iter().for_each(|e| { println!("{}", jsonpath::print_raw(e)) }),
-		_														=> return Err(error::Error::Malformed),
-	}
+  let value: serde_json::Value = serde_json::from_str(&data)?;
+  match value {
+    serde_json::Value::Array(v) => v.iter().for_each(|e| { println!("{}", jsonpath::print_raw(e)) }),
+    _                           => return Err(error::Error::Malformed),
+  }
 
-	Ok(())
+  Ok(())
 }
 
 fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
-	let path = socket_path(&sub.path);
-	if !path.exists() {
-		run_svc(opts, &path)?;
-	}
+  let path = socket_path(&sub.path);
+  if !path.exists() {
+    run_svc(opts, &path)?;
+  }
 
-	let stream = UnixStream::connect(path)?;
-	let mut rpc = rpc::RPC::new(stream)?;
-	let key = match &sub.key {
-		Some(key) => key.to_string(),
-		None			=> Alphanumeric.sample_string(&mut rand::thread_rng(), 16),
-	};
+  let stream = UnixStream::connect(path)?;
+  let mut rpc = rpc::RPC::new(stream)?;
+  let key = match &sub.key {
+    Some(key) => key.to_string(),
+    None      => Alphanumeric.sample_string(&mut rand::thread_rng(), 16),
+  };
 
-	let mut data = String::new();
-	io::stdin().read_to_string(&mut data)?;
-	let value: serde_json::Value = serde_json::from_str(&data)?;
-	
-	// re-encode the value to ensure there is no extraneous whitespace
-	rpc.write_cmd(&rpc::Operation::new_set(&key, &value.to_string()))?;
-	rpc.expect_cmd(&[rpc::CMD_OK])?;
+  let mut data = String::new();
+  io::stdin().read_to_string(&mut data)?;
+  let value: serde_json::Value = serde_json::from_str(&data)?;
+  
+  // re-encode the value to ensure there is no extraneous whitespace
+  rpc.write_cmd(&rpc::Operation::new_set(&key, &value.to_string()))?;
+  rpc.expect_cmd(&[rpc::CMD_OK])?;
 
-	println!("{}", key);
-	Ok(())
+  println!("{}", key);
+  Ok(())
 }
 
 fn cmd_delete(_opts: &Options, sub: &DeleteOptions) -> Result<(), error::Error> {
-	let path = socket_path(&sub.path);
-	if !path.exists() {
-		return Ok(()); // no service running, nothing do delete
-	}
+  let path = socket_path(&sub.path);
+  if !path.exists() {
+    return Ok(()); // no service running, nothing do delete
+  }
 
-	let stream = UnixStream::connect(path)?;
-	let mut rpc = rpc::RPC::new(stream)?;
+  let stream = UnixStream::connect(path)?;
+  let mut rpc = rpc::RPC::new(stream)?;
 
-	rpc.write_cmd(&rpc::Operation::new_delete(&sub.key))?;
-	rpc.expect_cmd(&[rpc::CMD_OK])?;
+  rpc.write_cmd(&rpc::Operation::new_delete(&sub.key))?;
+  rpc.expect_cmd(&[rpc::CMD_OK])?;
 
-	println!("{}", &sub.key);
-	Ok(())
+  println!("{}", &sub.key);
+  Ok(())
 }
 
 fn socket_path(path: &Option<String>) -> path::PathBuf {
-	match path {
-		Some(path) => path::PathBuf::from(path),
-		None => {
-			let mut path = env::temp_dir();
-			path.push("structs.sock");
-			path
-		},
-	}
+  match path {
+    Some(path) => path::PathBuf::from(path),
+    None => {
+      let mut path = env::temp_dir();
+      path.push("structs.sock");
+      path
+    },
+  }
 }

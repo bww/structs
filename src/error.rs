@@ -15,8 +15,8 @@ pub enum Error {
   Utf8Error(str::Utf8Error),
   FromUtf8Error(string::FromUtf8Error),
   SerdeError(serde_json::Error),
-	SystemTimeError(time::SystemTimeError),
-	DurationError(duration::Error),
+  SystemTimeError(time::SystemTimeError),
+  DurationError(duration::Error),
   SendError,
   RecvError(mpsc::RecvError),
   Malformed,
@@ -45,25 +45,25 @@ impl From<io::Error> for Error {
 
 impl From<serde_json::Error> for Error {
   fn from(err: serde_json::Error) -> Self {
-		Self::SerdeError(err)
+    Self::SerdeError(err)
   }
 }
 
 impl From<time::SystemTimeError> for Error {
   fn from(err: time::SystemTimeError) -> Self {
-		Self::SystemTimeError(err)
+    Self::SystemTimeError(err)
   }
 }
 
 impl From<mpsc::RecvError> for Error {
   fn from(err: mpsc::RecvError) -> Self {
-		Self::RecvError(err)
+    Self::RecvError(err)
   }
 }
 
 impl From<duration::Error> for Error {
   fn from(err: duration::Error) -> Self {
-		Self::DurationError(err)
+    Self::DurationError(err)
   }
 }
 
@@ -75,8 +75,8 @@ impl fmt::Display for Error {
       Self::FromUtf8Error(err) => err.fmt(f),
       Self::SerdeError(err) => err.fmt(f),
       Self::SystemTimeError(err) => err.fmt(f),
-			Self::DurationError(err) => err.fmt(f),
-			Self::SendError => write!(f, "Could not send"),
+      Self::DurationError(err) => err.fmt(f),
+      Self::SendError => write!(f, "Could not send"),
       Self::RecvError(err) => err.fmt(f),
       Self::Malformed => write!(f, "Malformed"),
       Self::Unexpected => write!(f, "Unexpected"),

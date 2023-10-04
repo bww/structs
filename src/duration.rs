@@ -7,9 +7,9 @@ use nom;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-	ParseIntError(num::ParseIntError),
-	ParseSyntaxError,
-	ParseDurationError,
+  ParseIntError(num::ParseIntError),
+  ParseSyntaxError,
+  ParseDurationError,
 }
 
 impl From<num::ParseIntError> for Error {
@@ -29,10 +29,10 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-    	Self::ParseIntError(err) => err.fmt(f),
-    	Self::ParseSyntaxError => write!(f, "Syntax error"),
-			Self::ParseDurationError => write!(f, "Could not parse duration"),
-		}
+      Self::ParseIntError(err) => err.fmt(f),
+      Self::ParseSyntaxError => write!(f, "Syntax error"),
+      Self::ParseDurationError => write!(f, "Could not parse duration"),
+    }
   }
 }
 
@@ -40,16 +40,16 @@ impl fmt::Display for Error {
 pub struct Duration(time::Duration);
 
 impl Duration {
-	pub fn duration(&self) -> time::Duration {
-		self.0
-	}
+  pub fn duration(&self) -> time::Duration {
+    self.0
+  }
 }
 
 impl FromStr for Duration {
-	type Err = Error;
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		Ok(Self(parse(s)?))
-	}
+  type Err = Error;
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Ok(Self(parse(s)?))
+  }
 }
 
 fn is_digit(c: char) -> bool {
@@ -109,7 +109,7 @@ pub fn parse(input: &str) -> Result<time::Duration, Error> {
     input = remainder;
   }
   
-	Ok(time::Duration::from_secs(result))
+  Ok(time::Duration::from_secs(result))
 }
 
 #[cfg(test)]
