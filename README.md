@@ -2,7 +2,7 @@
 _Structs_ is a tool for interacting with structured data in shell scripts. Structs allows you to parse some JSON, maintain the data structure in memory, and arbitrarily access fields in a natural way. There are other ways to accomplish this in shell scripts, but they are mostly pretty clunky.
 
 ### Define a data structure
-A data structure can be defined via the `set` operation. The key for the newly-creaated structure is printed and can be used to fetch data.
+A data structure can be defined via the `set` operation. The key for the newly-created structure is printed and can be used to fetch data.
 
 ```sh
 $ structs set
@@ -26,7 +26,7 @@ $ structs set
 woh7iu3tieB0
 ```
 
-### Fetching data
+### Fetch a structure
 The entire data structure can be fetched using its key, or its fields can be refernced using common dot-notation.
 ```sh
 $ structs get woh7iu3tieB0
@@ -40,12 +40,21 @@ $ structs get woh7iu3tieB0.numbers.two
 {"cardinal":2,"ordinal":"2nd"}
 ```
 
+Structs can be used in collaboration with [Jq](https://jqlang.github.io/jq/) for more elaborate processing.
+```sh
+$ structs get woh7iu3tieB0.numbers.two | jq -r 'map(.) | @csv'
+2,"2nd"
+```
+
 ### Fetch an individual field
-Referencing a primitive field (string, number, boolean) is usually more useful as the underlying value instead of the JSON. Use the `-r` or `--raw` flag to print the value instead of JSON.
+Referencing a primitive field (string, number, boolean) is usually more useful than fetching structures.
 ```sh
 $ structs get woh7iu3tieB0.numbers.two.ordinal
 "2nd"
+```
 
+By default, individual fields are formatted as JSON. Use the `-r` or `--raw` flag to print a field's value instead of its JSON representation.
+```sh
 $ structs get --raw woh7iu3tieB0.numbers.two.ordinal
 2nd
 ```
