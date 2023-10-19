@@ -59,6 +59,17 @@ impl Path {
       }, None),
     }
   }
+
+  pub fn trim(&self, n: usize) -> Option<Path> {
+    let mut p: &str = &self.0;
+    for _ in 0..n {
+      match p.rfind(SEP) {
+        Some(x) => p = &p[..x],
+        None => return None,
+      }
+    }
+    Some(Path::new(p))
+  }
 }
 
 pub fn print_raw<'a>(value: &'a Value) -> String {
@@ -94,6 +105,22 @@ fn json_deref<'a>(name: &str, value: &'a Value) -> Option<&'a Value> {
 mod tests {
   use super::*;
   
+  #[test]
+  fn trim_path() {
+    let p = Path::new("a");
+    assert_eq!(Some(Path::new("a")), p.trim(0));
+    let p = Path::new("a.b");
+    assert_eq!(Some(Path::new("a")), p.trim(1));
+    let p = Path::new("a.b.c");
+    assert_eq!(Some(Path::new("a.b")), p.trim(1));
+    let p = Path::new("a.b.c");
+    assert_eq!(Some(Path::new("a")), p.trim(2));
+    let p = Path::new("a.b.c");
+    assert_eq!(None, p.trim(3));
+    let p = Path::new("a.b.c");
+    assert_eq!(None, p.trim(100));
+  }
+
   #[test]
   fn find_path() {
     let v: Value = serde_json::from_str(r#"{

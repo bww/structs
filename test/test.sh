@@ -10,3 +10,5 @@ key=$(cat "$me_home/size.json" | structs --debug set)
 for i in $(structs range ${key}.data); do
   echo "Size $(structs get -r ${key}.data.${i}.size): $(structs get -r ${key}.data.${i}.name)"
 done
+
+echo "5" | struts set ${key}.data.0.size

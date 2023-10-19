@@ -122,6 +122,33 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
   }
 }
 
+// fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val: serde_json::Value) -> Result<&'a serde_json::Value, error::Error> {
+//   let jp = jsonpath::Path::new(key);
+//   let (name, path) = jp.next();
+//   let name = match name {
+//     Some(name) => name,
+//     None => return Err(error::Error::Malformed),
+//   };
+//   match path {
+//     Some(path) => jsonpath::Path::new(path).find(data)
+//   };
+//   let (data, rest) = if let Some(data) = store.get(name) {
+//     match path {
+//       Some(path) => jsonpath::Path::new(path).find(data),
+//       None       => (Some(data), None),
+//     }
+//   } else {
+//     (None, None)
+//   };
+//   match rest {
+//     Some(_) => Err(error::Error::NotFound),
+//     None    => match data { 
+//       Some(data) => Ok(data),
+//       None       => Err(error::Error::NotFound),
+//     }
+//   }
+// }
+
 fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
   let cmd = req.operation();
   if opts.debug {
