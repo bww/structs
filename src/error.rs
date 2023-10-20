@@ -22,6 +22,7 @@ pub enum Error {
   Malformed,
   Unexpected,
   NotFound,
+  InvalidIndex,
   ServiceError,
 }
 
@@ -81,6 +82,7 @@ impl fmt::Display for Error {
       Self::Malformed => write!(f, "Malformed"),
       Self::Unexpected => write!(f, "Unexpected"),
       Self::NotFound => write!(f, "Not found"),
+      Self::InvalidIndex => write!(f, "Invalid index"),
       Self::ServiceError => write!(f, "Service error"),
     }
   }

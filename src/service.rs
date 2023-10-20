@@ -122,32 +122,36 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
   }
 }
 
-// fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val: serde_json::Value) -> Result<&'a serde_json::Value, error::Error> {
-//   let jp = jsonpath::Path::new(key);
-//   let (name, path) = jp.next();
-//   let name = match name {
-//     Some(name) => name,
-//     None => return Err(error::Error::Malformed),
-//   };
-//   match path {
-//     Some(path) => jsonpath::Path::new(path).find(data)
-//   };
-//   let (data, rest) = if let Some(data) = store.get(name) {
-//     match path {
-//       Some(path) => jsonpath::Path::new(path).find(data),
-//       None       => (Some(data), None),
-//     }
-//   } else {
-//     (None, None)
-//   };
-//   match rest {
-//     Some(_) => Err(error::Error::NotFound),
-//     None    => match data { 
-//       Some(data) => Ok(data),
-//       None       => Err(error::Error::NotFound),
-//     }
-//   }
-// }
+fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val: serde_json::Value) -> Result<&'a serde_json::Value, error::Error> {
+  let jp = jsonpath::Path::new(key);
+  let (key, path) = match jp.next() {
+    (Some(key), Some(path)) => (key, jsonpath::Path::new(path)),
+    _                       => return Err(error::Error::Malformed),
+  };
+  let (path, name) = match path.trim(1) {
+    (Some(p), Some(n)) => (p, n),
+    (Some(p), None)    => (p, None),
+    _                  => return Err(error::Error::Malformed),
+  };
+  let (data, rest) = match store.get(key) {
+    Some(data) => data,
+    None       => return Err(error::Error::NotFound),
+  };
+  let data = match path.value(data) {
+    Some(data) => data,
+    None       => return Err(error::Error::NotFound),
+  };
+  match data {
+    serde_json::Value::Object(v) => v.insert(name, val),
+    serde_json::Value::Array(v)  => match jsonpath::index(v, name) {
+      Some(i) => v[i] = val,
+      None    => return Err(error::Error::Malformed),
+    },
+    _ => return Err(error::Error::Malformed), // other types cannot be updated
+  }
+  store.insert(key.to_owned(), data);
+  Ok(data) // updated value
+}
 
 fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
   let cmd = req.operation();

@@ -15,6 +15,13 @@ impl Path {
     &self.0
   }
 
+  pub fn value<'a>(&self, value: &'a Value) -> Option<&'a Value> {
+    match self.find(value) {
+      (Some(v), None) => Some(v),
+      _               => None,
+    }
+  }
+
   pub fn find<'a>(&self, value: &'a Value) -> (Option<&'a Value>, Option<Path>) {
     let (v, p) = self.deref(value);
     match v {
@@ -102,6 +109,23 @@ fn json_deref<'a>(name: &str, value: &'a Value) -> Option<&'a Value> {
       },
       Err(_) => None,
     },
+  }
+}
+
+pub fn index(value: &Value, name: &str) -> Option<usize> {
+  let value = if let Value::Array(value) = value {
+    value
+  }else{
+    return None;
+  };
+  let i = match name.parse::<usize>() {
+    Ok(i)  => i,
+    Err(_) => return None,
+  };
+  if value.len() > i {
+    Some(i)
+  }else{
+    None
   }
 }
 
