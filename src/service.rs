@@ -99,13 +99,13 @@ pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_
 }
 
 fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Result<&'a serde_json::Value, error::Error> {
-  let jp = jsonpath::Path::new(key);
-  let (name, path) = jp.next();
-  let name = match name {
-    Some(name) => name,
+  let path = jsonpath::Path::new(key);
+  let (key, path) = path.next();
+  let key = match key {
+    Some(key) => key,
     None => return Err(error::Error::Malformed),
   };
-  let (data, rest) = if let Some(data) = store.get(name) {
+  let (data, rest) = if let Some(data) = store.get(key) {
     match path {
       Some(path) => jsonpath::Path::new(path).find(data),
       None       => (Some(data), None),
@@ -122,33 +122,41 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
   }
 }
 
-fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val: serde_json::Value) -> Result<&'a serde_json::Value, error::Error> {
-  let jp = jsonpath::Path::new(key);
-  let (key, path) = match jp.next() {
+fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val: serde_json::Value) -> Result<serde_json::Value, error::Error> {
+  let path = jsonpath::Path::new(key);
+  let (key, path) = match path.next() {
     (Some(key), Some(path)) => (key, jsonpath::Path::new(path)),
     _                       => return Err(error::Error::Malformed),
   };
-  let (path, name) = match path.trim(1) {
-    (Some(p), Some(n)) => (p, n),
+  let (path, leaf) = match path.trim(1) {
+    (Some(p), Some(l)) => (p, Some(l)),
     (Some(p), None)    => (p, None),
     _                  => return Err(error::Error::Malformed),
   };
-  let (data, rest) = match store.get(key) {
-    Some(data) => data,
+  let mut data = match store.get(key) {
+    Some(data) => data.clone(),
     None       => return Err(error::Error::NotFound),
   };
-  let data = match path.value(data) {
-    Some(data) => data,
-    None       => return Err(error::Error::NotFound),
-  };
-  match data {
-    serde_json::Value::Object(v) => v.insert(name, val),
-    serde_json::Value::Array(v)  => match jsonpath::index(v, name) {
-      Some(i) => v[i] = val,
-      None    => return Err(error::Error::Malformed),
+  let val = match leaf {
+    Some(leaf) => {
+      let base = match &mut path.value(&mut data) {
+        Some(ref mut data) => data,
+        None       => return Err(error::Error::NotFound),
+      };
+      match base {
+        serde_json::Value::Object(v) => {
+          v.insert(leaf.to_string(), val);
+        },
+        serde_json::Value::Array(v)  => match jsonpath::index(base, leaf) {
+          Some(i) => v[i] = val,
+          None    => return Err(error::Error::Malformed),
+        },
+        _ => return Err(error::Error::Malformed), // other types cannot be updated
+      }
+      base 
     },
-    _ => return Err(error::Error::Malformed), // other types cannot be updated
-  }
+    None => return Err(error::Error::NotFound),
+  };
   store.insert(key.to_owned(), data);
   Ok(data) // updated value
 }
