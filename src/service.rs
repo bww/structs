@@ -115,7 +115,7 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
   };
   match rest {
     Some(_) => Err(error::Error::NotFound),
-    None    => match data { 
+    None    => match data {
       Some(data) => Ok(data),
       None       => Err(error::Error::NotFound),
     }
@@ -124,41 +124,47 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
 
 fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val: serde_json::Value) -> Result<serde_json::Value, error::Error> {
   let path = jsonpath::Path::new(key);
+  // split into the key and path
   let (key, path) = match path.next() {
     (Some(key), Some(path)) => (key, jsonpath::Path::new(path)),
     _                       => return Err(error::Error::Malformed),
   };
+  // split into the path to the leaf node we're referencing and the leaf identifier
   let (path, leaf) = match path.trim(1) {
     (Some(p), Some(l)) => (p, Some(l)),
     (Some(p), None)    => (p, None),
     _                  => return Err(error::Error::Malformed),
   };
-  let mut data = match store.get(key) {
+  // this is the structure we're referencing into; we create a copy which we'll mutate
+  let data = match store.get(key) {
     Some(data) => data.clone(),
     None       => return Err(error::Error::NotFound),
   };
-  let val = match leaf {
+  // this is the value at the specific path we're referencing
+  let rval = path.value(&data);
+  let rval = match leaf {
     Some(leaf) => {
-      let base = match &mut path.value(&mut data) {
-        Some(ref mut data) => data,
+      let mut base = match rval {
+        Some(rval) => rval.clone(),
         None       => return Err(error::Error::NotFound),
       };
-      match base {
+      match &mut base {
         serde_json::Value::Object(v) => {
           v.insert(leaf.to_string(), val);
         },
-        serde_json::Value::Array(v)  => match jsonpath::index(base, leaf) {
+        serde_json::Value::Array(v) => match jsonpath::index(&base, leaf) {
           Some(i) => v[i] = val,
           None    => return Err(error::Error::Malformed),
         },
         _ => return Err(error::Error::Malformed), // other types cannot be updated
       }
-      base 
+      base
     },
     None => return Err(error::Error::NotFound),
   };
-  store.insert(key.to_owned(), data);
-  Ok(data) // updated value
+  // persist a copy in the store, return the updated value
+  store.insert(key.to_owned(), rval.clone());
+  Ok(rval)
 }
 
 fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
@@ -246,4 +252,3 @@ fn run_stop(opts: &Options,  mut req: rpc::Request) -> Result<(), error::Error> 
   req.send(rpc::Operation::new_ok())?;
   Ok(())
 }
-

@@ -52,6 +52,13 @@ impl Path {
     }
   }
 
+  pub fn has_next(&self) -> bool {
+    match self.0.find(SEP) {
+      Some(x) => true,
+      None    => false,
+    }
+  }
+
   pub fn next<'a>(&'a self) -> (Option<&'a str>, Option<&'a str>) {
     match self.0.find(SEP) {
       Some(x) => (Some(&self.0[..x]), if self.0.len() > x {
@@ -132,7 +139,7 @@ pub fn index(value: &Value, name: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  
+
   #[test]
   fn trim_path() {
     let p = Path::new("a");
@@ -200,4 +207,3 @@ mod tests {
     assert_eq!((None, Some(Path::new("invalid.nonsense"))), p.find(&v));
   }
 }
-
