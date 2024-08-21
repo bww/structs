@@ -110,18 +110,24 @@ impl Request {
   }
 }
 
+pub struct Options {
+  pub debug: bool,
+}
+
 pub struct RPC {
   reader: io::BufReader<UnixStream>,
   writer: UnixStream,
+  opts: Options,
 }
 
 impl RPC {
-  pub fn new(stream: UnixStream) -> Result<Self, error::Error> {
+  pub fn new(stream: UnixStream, opts: Options) -> Result<Self, error::Error> {
     let writer = stream.try_clone()?;
     let reader = io::BufReader::new(stream);
     Ok(Self{
       reader: reader,
       writer: writer,
+      opts: opts,
     })
   }
 
@@ -131,6 +137,10 @@ impl RPC {
       0 => return Ok(None),
       _ => line.trim(),
     };
+
+    if self.opts.debug {
+      println!(">>> rpc: {}", res);
+    }
 
     let mut text = res;
     let mut args: Vec<&str> = Vec::new();
@@ -193,7 +203,7 @@ impl RPC {
 
   pub fn write_line(&mut self, line: &[&str]) -> Result<(), error::Error> {
     let mut i = 0;
-    for cmd in line { 
+    for cmd in line {
       if i > 0 { self.writer.write_all(b" ")?; }
       self.writer.write_all(cmd.trim().as_bytes())?;
       i += 1;
@@ -226,4 +236,3 @@ impl Drop for Socket {
     self.cleanup().expect("Could not remove socket");
   }
 }
-

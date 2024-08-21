@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde_json;
 use serde_json::value::Value;
 
@@ -52,7 +54,7 @@ impl Path {
     }
   }
 
-  pub fn has_next(&self) -> bool {
+  pub fn _has_next(&self) -> bool {
     match self.0.find(SEP) {
       Some(_) => true,
       None    => false,
@@ -90,6 +92,12 @@ impl Path {
   }
 }
 
+impl fmt::Display for Path {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.0)
+  }
+}
+
 pub fn print_raw<'a>(value: &'a Value) -> String {
   match value {
     Value::Null      => "null".to_string(),
@@ -119,7 +127,7 @@ fn json_deref<'a>(name: &str, value: &'a Value) -> Option<&'a Value> {
   }
 }
 
-pub fn index(value: &Value, name: &str) -> Option<usize> {
+pub fn _index(value: &Value, name: &str) -> Option<usize> {
   if let Value::Array(value) = value {
     index_array(value, name)
   }else{

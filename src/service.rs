@@ -163,6 +163,7 @@ fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path
     },
     None => return Err(error::Error::NotFound),
   };
+  println!(">>> UPDATE: {} -> {}", path, rval);
   // persist a copy in the store, return the updated value
   store.insert(key.to_owned(), rval.clone());
   Ok(rval)

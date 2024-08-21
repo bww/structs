@@ -15,7 +15,7 @@ pub fn run(opts: Options, stream: UnixStream, tx: mpsc::Sender<rpc::Request>) {
 }
 
 fn handle(opts: &Options, stream: UnixStream, tx: mpsc::Sender<rpc::Request>) -> Result<(), error::Error> {
-  let mut rpc = rpc::RPC::new(stream)?;
+  let mut rpc = rpc::RPC::new(stream, rpc::Options{debug: opts.debug})?;
   loop {
     let cmd = match rpc.read_cmd()? {
       Some(cmd) => cmd,
@@ -35,5 +35,3 @@ fn handle(opts: &Options, stream: UnixStream, tx: mpsc::Sender<rpc::Request>) ->
   }
   Ok(())
 }
-
-

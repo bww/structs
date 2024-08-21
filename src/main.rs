@@ -181,14 +181,14 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
   Ok(())
 }
 
-fn cmd_stop(_opts: &Options, sub: &ShutdownOptions) -> Result<(), error::Error> {
+fn cmd_stop(opts: &Options, sub: &ShutdownOptions) -> Result<(), error::Error> {
   let path = socket_path(&sub.path);
   if !path.exists() {
     return Ok(()); // no service running, nothing to stop
   }
 
   let stream = UnixStream::connect(path)?;
-  let mut rpc = rpc::RPC::new(stream)?;
+  let mut rpc = rpc::RPC::new(stream, rpc::Options{debug: opts.debug})?;
 
   rpc.write_cmd(&rpc::Operation::new_shutdown())?;
   rpc.expect_cmd(&[rpc::CMD_OK])?;
@@ -203,7 +203,7 @@ fn cmd_get(opts: &Options, sub: &FetchOptions) -> Result<(), error::Error> {
   }
 
   let stream = UnixStream::connect(path)?;
-  let mut rpc = rpc::RPC::new(stream)?;
+  let mut rpc = rpc::RPC::new(stream, rpc::Options{debug: opts.debug})?;
 
   rpc.write_cmd(&rpc::Operation::new_get(&sub.key))?;
 
@@ -232,7 +232,7 @@ fn cmd_range(opts: &Options, sub: &RangeOptions) -> Result<(), error::Error> {
   }
 
   let stream = UnixStream::connect(path)?;
-  let mut rpc = rpc::RPC::new(stream)?;
+  let mut rpc = rpc::RPC::new(stream, rpc::Options{debug: opts.debug})?;
 
   rpc.write_cmd(&rpc::Operation::new_range(&sub.key))?;
 
@@ -262,7 +262,7 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
   }
 
   let stream = UnixStream::connect(path)?;
-  let mut rpc = rpc::RPC::new(stream)?;
+  let mut rpc = rpc::RPC::new(stream, rpc::Options{debug: opts.debug})?;
   let key = match &sub.key {
     Some(key) => key.to_string(),
     None      => Alphanumeric.sample_string(&mut rand::thread_rng(), 16),
@@ -271,7 +271,7 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
   let mut data = String::new();
   io::stdin().read_to_string(&mut data)?;
   let value: serde_json::Value = serde_json::from_str(&data)?;
-  
+
   // re-encode the value to ensure there is no extraneous whitespace
   rpc.write_cmd(&rpc::Operation::new_set(&key, &value.to_string()))?;
   rpc.expect_cmd(&[rpc::CMD_OK])?;
@@ -280,14 +280,14 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
   Ok(())
 }
 
-fn cmd_delete(_opts: &Options, sub: &DeleteOptions) -> Result<(), error::Error> {
+fn cmd_delete(opts: &Options, sub: &DeleteOptions) -> Result<(), error::Error> {
   let path = socket_path(&sub.path);
   if !path.exists() {
     return Ok(()); // no service running, nothing do delete
   }
 
   let stream = UnixStream::connect(path)?;
-  let mut rpc = rpc::RPC::new(stream)?;
+  let mut rpc = rpc::RPC::new(stream, rpc::Options{debug: opts.debug})?;
 
   rpc.write_cmd(&rpc::Operation::new_delete(&sub.key))?;
   rpc.expect_cmd(&[rpc::CMD_OK])?;
