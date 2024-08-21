@@ -122,12 +122,13 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
   }
 }
 
-fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val: serde_json::Value) -> Result<serde_json::Value, error::Error> {
-  let path = jsonpath::Path::new(key);
-  // split into the key and path
-  let (key, path) = match path.next() {
-    (Some(key), Some(path)) => (key, jsonpath::Path::new(path)),
-    _                       => return Err(error::Error::Malformed),
+fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path: Option<jsonpath::Path>, val: serde_json::Value) -> Result<serde_json::Value, error::Error> {
+  let path = match path {
+    Some(path) => path,
+    None       => {
+      store.insert(key.to_string(), val.clone());
+      return Ok(val);
+    },
   };
   // split into the path to the leaf node we're referencing and the leaf identifier
   let (path, leaf) = match path.trim(1) {
@@ -226,7 +227,13 @@ fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut 
     Some(data) => serde_json::from_str(&data)?,
     None       => serde_json::Value::Null,
   };
-  store.insert(cmd.args()[0].clone(), data);
+  let key = cmd.args()[0].clone();
+  let path = jsonpath::Path::new(&key);
+  let _ = match path.next() {
+    (Some(key), Some(path)) => write(store, key, Some(jsonpath::Path::new(path)), data)?,
+    (Some(key), None)       => write(store, key, None, data)?,
+    _                       => return Err(error::Error::Malformed),
+  };
   req.send(rpc::Operation::new_ok())?;
   Ok(())
 }
