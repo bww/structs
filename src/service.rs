@@ -152,7 +152,7 @@ fn store<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, val:
         serde_json::Value::Object(v) => {
           v.insert(leaf.to_string(), val);
         },
-        serde_json::Value::Array(v) => match jsonpath::index(&base, leaf) {
+        serde_json::Value::Array(v) => match jsonpath::index_array(v, leaf) {
           Some(i) => v[i] = val,
           None    => return Err(error::Error::Malformed),
         },

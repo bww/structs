@@ -54,7 +54,7 @@ impl Path {
 
   pub fn has_next(&self) -> bool {
     match self.0.find(SEP) {
-      Some(x) => true,
+      Some(_) => true,
       None    => false,
     }
   }
@@ -120,11 +120,14 @@ fn json_deref<'a>(name: &str, value: &'a Value) -> Option<&'a Value> {
 }
 
 pub fn index(value: &Value, name: &str) -> Option<usize> {
-  let value = if let Value::Array(value) = value {
-    value
+  if let Value::Array(value) = value {
+    index_array(value, name)
   }else{
-    return None;
-  };
+    None
+  }
+}
+
+pub fn index_array(value: &Vec<Value>, name: &str) -> Option<usize> {
   let i = match name.parse::<usize>() {
     Ok(i)  => i,
     Err(_) => return None,
