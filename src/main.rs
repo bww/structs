@@ -24,6 +24,7 @@ mod service;
 mod client;
 mod duration;
 mod jsonpath;
+mod log;
 
 const _VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -108,7 +109,7 @@ fn main() {
   match cmd(){
     Ok(_)    => return,
     Err(err) => {
-      eprintln!("{}", &format!("* * * {}", err).yellow().bold());
+      log::logln!("{}", &format!("* * * {}", err).yellow().bold());
       process::exit(1);
     },
   };
@@ -117,13 +118,19 @@ fn main() {
 fn run_svc<P: AsRef<path::Path>>(opts: &Options, path: P) -> Result<(), error::Error> {
   let me = env::current_exe()?;
   if opts.debug {
-    eprintln!(">>> No service running; starting: {}", me.display());
+    log::logln!(">>> No service running; starting: {}", me.display());
   }
-  process::Command::new(me)
-    .arg("run").arg("--finalize").arg("--timeout").arg("1m")
+  let mut cmd =  process::Command::new(me);
+  if opts.debug {
+    cmd.arg("--debug");
+  }
+  if opts.verbose {
+    cmd.arg("--verbose");
+  }
+  cmd.arg("run").arg("--finalize").arg("--timeout").arg("1m")
     .stdin(process::Stdio::null())
-    .stdout(process::Stdio::null())
-    .stderr(process::Stdio::null())
+    .stdout(if opts.debug { process::Stdio::inherit() } else { process::Stdio::null() })
+    .stderr(if opts.debug { process::Stdio::inherit() } else { process::Stdio::null() })
     .spawn()?;
   let mut dur = time::Duration::from_millis(1);
   for _ in 0..5 {
@@ -156,7 +163,7 @@ fn cmd_run(opts: &Options, sub: &RunOptions) -> Result<(), error::Error> {
   let sock = rpc::Socket::new(&path);
   let path = path.as_path();
   if opts.debug {
-    eprintln!("==> Listening on: {}", path.display());
+    log::logln!("==> Listening on: {}", path.display());
   }
 
   let data: BTreeMap<String, serde_json::Value> = BTreeMap::new();

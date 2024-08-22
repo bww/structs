@@ -6,11 +6,12 @@ use colored::Colorize;
 use crate::Options;
 use crate::error;
 use crate::rpc;
+use crate::log;
 
 pub fn run(opts: Options, stream: UnixStream, tx: mpsc::Sender<rpc::Request>) {
   match handle(&opts, stream, tx) {
     Ok(_)    => {},
-    Err(err) => eprintln!("{}", &format!("* * * {}", err).yellow().bold()),
+    Err(err) => log::logln!("{}", &format!("* * * {}", err).yellow().bold()),
   };
 }
 
@@ -29,7 +30,7 @@ fn handle(opts: &Options, stream: UnixStream, tx: mpsc::Sender<rpc::Request>) ->
     };
     let rsp = rsp_rx.recv()?;
     if opts.debug {
-      eprintln!("<<< {:?}", &rsp);
+      log::logln!("<<< {:?}", &rsp);
     }
     rpc.write_cmd(&rsp)?;
   }

@@ -13,6 +13,7 @@ use crate::RunOptions;
 use crate::error;
 use crate::rpc;
 use crate::jsonpath;
+use crate::log;
 
 use crate::rpc::CMD_GET;
 use crate::rpc::CMD_RANGE;
@@ -23,7 +24,7 @@ use crate::rpc::CMD_SHUTDOWN;
 fn cleanup_on_signal(opts: Options, mut sock: rpc::Socket) {
   ctrlc::set_handler(move || {
     if opts.debug || opts.verbose {
-      eprintln!(">>> Shutting down due to signal...");
+      log::logln!(">>> Shutting down due to signal...");
     }
     process::exit(match sock.cleanup() {
       Ok(_)  => 0,
@@ -34,7 +35,7 @@ fn cleanup_on_signal(opts: Options, mut sock: rpc::Socket) {
 
 fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) -> Result<mpsc::Sender<()>, error::Error> {
   if opts.debug {
-    eprintln!(">>> Idle timeout: {:?}", &dur);
+    log::logln!(">>> Idle timeout: {:?}", &dur);
   }
   let mut last_op = time::SystemTime::now();
   let (tx, rx) = mpsc::channel();
@@ -49,7 +50,7 @@ fn cleanup_on_idle(opts: Options, mut sock: rpc::Socket, dur: time::Duration) ->
       last_op = time::SystemTime::now();
     }
     if opts.debug || opts.verbose {
-      eprintln!(">>> Shutting down after {:?} of inactivity...", last_op.elapsed().unwrap());
+      log::logln!(">>> Shutting down after {:?} of inactivity...", last_op.elapsed().unwrap());
     }
     process::exit(match sock.cleanup() {
       Ok(_)  => 0,
@@ -68,29 +69,32 @@ pub fn run(opts: Options, runopts: RunOptions, mut data: BTreeMap<String, serde_
 
   loop {
     let req = rx.recv()?;
-    match req.name().as_ref() {
-      CMD_GET      => run_get(&opts, &data, req)?,
-      CMD_RANGE    => run_range(&opts, &data, req)?,
-      CMD_SET      => run_set(&opts, &mut data, req)?,
+    let res = match req.name().as_ref() {
+      CMD_GET      => run_get(&opts, &data, req),
+      CMD_RANGE    => run_range(&opts, &data, req),
+      CMD_SET      => run_set(&opts, &mut data, req),
       CMD_DELETE   => {
         run_delete(&opts, &mut data, req)?;
-        if runopts.finalize && data.len() == 0 { break; }
+        Ok(if runopts.finalize && data.len() == 0 { break; })
       },
       CMD_SHUTDOWN => {
         run_stop(&opts, req)?;
         break;
       },
-      cmd => eprintln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold()),
+      cmd => Ok(log::logln!("{}", &format!("* * * Unknown command: {}", cmd).yellow().bold())),
     };
+    if let Err(err) = res {
+      log::logln!("{}", format!("* * * Error: {}", err).yellow().bold());
+    }
     if let Some(poll_tx) = &poll_tx {
       if let Err(err) = poll_tx.send(()) {
-        eprintln!("{}", &format!("* * * Could not poll: {}", err).yellow().bold());
+        log::logln!("{}", format!("* * * Could not poll: {}", err).yellow().bold());
       }
     }
   }
 
   if opts.debug || opts.verbose {
-    eprintln!(">>> Shutting down due to finalization...");
+    log::logln!(">>> Shutting down due to finalization...");
   }
   process::exit(match sock.cleanup() {
     Ok(_)  => 0,
@@ -125,11 +129,9 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
 fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path: Option<jsonpath::Path>, val: serde_json::Value) -> Result<serde_json::Value, error::Error> {
   let path = match path {
     Some(path) => path,
-    None       => {
-      store.insert(key.to_string(), val.clone());
-      return Ok(val);
-    },
+    None       => return Ok(store.insert(key.to_string(), val.clone()).unwrap()),
   };
+  log::logln!("AFFIRMATIVE: HERE: {} / {:?}", path, path.trim(1));
   // split into the path to the leaf node we're referencing and the leaf identifier
   let (path, leaf) = match path.trim(1) {
     (Some(p), Some(l)) => (p, Some(l)),
@@ -172,7 +174,7 @@ fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path
 fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
   let cmd = req.operation();
   if opts.debug {
-    eprintln!(">>> {:?}", cmd);
+    log::logln!(">>> {:?}", cmd);
   }
   if cmd.args().len() != 1 {
     return Err(error::Error::Malformed);
@@ -191,7 +193,7 @@ fn run_get(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req:
 fn run_range(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
   let cmd = req.operation();
   if opts.debug {
-    eprintln!(">>> {:?}", cmd);
+    log::logln!(">>> {:?}", cmd);
   }
   if cmd.args().len() != 1 {
     return Err(error::Error::Malformed);
@@ -219,7 +221,7 @@ fn run_range(opts: &Options, store: &BTreeMap<String, serde_json::Value>, mut re
 fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
   let cmd = req.operation();
   if opts.debug {
-    eprintln!(">>> {:?}", cmd);
+    log::logln!(">>> {:?}", cmd);
   }
   if cmd.args().len() != 1 {
     return Err(error::Error::Malformed);
@@ -230,6 +232,9 @@ fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut 
   };
   let key = cmd.args()[0].clone();
   let path = jsonpath::Path::new(&key);
+  if opts.debug {
+    log::logln!("... {:?}", path.next());
+  }
   let _ = match path.next() {
     (Some(key), Some(path)) => write(store, key, Some(jsonpath::Path::new(path)), data)?,
     (Some(key), None)       => write(store, key, None, data)?,
@@ -242,7 +247,7 @@ fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut 
 fn run_delete(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut req: rpc::Request) -> Result<(), error::Error> {
   let cmd = req.operation();
   if opts.debug {
-    eprintln!(">>> {:?}", cmd);
+    log::logln!(">>> {:?}", cmd);
   }
   if cmd.args().len() != 1 {
     return Err(error::Error::Malformed);
@@ -255,7 +260,7 @@ fn run_delete(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, m
 fn run_stop(opts: &Options,  mut req: rpc::Request) -> Result<(), error::Error> {
   let cmd = req.operation();
   if opts.debug {
-    eprintln!(">>> {:?}", cmd);
+    log::logln!(">>> {:?}", cmd);
   }
   req.send(rpc::Operation::new_ok())?;
   Ok(())

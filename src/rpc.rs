@@ -2,11 +2,13 @@ use std::io;
 use std::io::prelude::*;
 use std::fs;
 use std::path;
+use std::process;
 
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc;
 
 use crate::error;
+use crate::log;
 
 pub const CMD_SET:       &str = "set";
 pub const CMD_GET:       &str = "get";
@@ -16,6 +18,7 @@ pub const CMD_NONE:      &str = "none";
 pub const CMD_DELETE:    &str = "delete";
 pub const CMD_SHUTDOWN:  &str = "stop";
 pub const CMD_OK:        &str = "ok";
+pub const CMD_ERROR:     &str = "err";
 
 #[derive(Debug)]
 pub struct Operation {
@@ -50,6 +53,10 @@ impl Operation {
 
   pub fn new_ok() -> Self {
     Self::new(CMD_OK, &[], None)
+  }
+
+  pub fn new_error(msg: &str) -> Self {
+    Self::new(CMD_ERROR, &[], Some(msg))
   }
 
   pub fn new_found(name: &str, data: &str) -> Self {
@@ -139,7 +146,7 @@ impl RPC {
     };
 
     if self.opts.debug {
-      println!(">>> rpc: {}", res);
+      log::logln!("<<< rpc: {}", res);
     }
 
     let mut text = res;
@@ -210,6 +217,15 @@ impl RPC {
     }
     self.writer.write_all(b"\n")?;
     self.writer.flush()?;
+    if self.opts.debug {
+      let mut dbg = String::new();
+      let mut i = 0;
+      for cmd in line {
+        dbg += &((if i == 0 { "" } else { " " }).to_owned() + cmd.trim());
+        i += 1;
+      }
+      log::logln!(">>> rpc: {}", dbg);
+    }
     Ok(())
   }
 }
