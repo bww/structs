@@ -1,4 +1,5 @@
 use std::io;
+use std::fs;
 use std::env;
 use std::str;
 use std::path;
@@ -53,6 +54,8 @@ enum Command {
   Delete(DeleteOptions),
   #[clap(name="stop", about="Shutdown the service, if it is running")]
   Shutdown(ShutdownOptions),
+  #[clap(name="cleanup", about="Cleanup after inconsistent state and delete the socket")]
+  Cleanup(CleanupOptions),
 }
 
 #[derive(Args, Debug, Clone)]
@@ -105,6 +108,12 @@ struct ShutdownOptions {
   path: Option<String>,
 }
 
+#[derive(Args, Debug, Clone)]
+struct CleanupOptions {
+  #[clap(long="socket", name="socket", help="The path to the server socket")]
+  path: Option<String>,
+}
+
 fn main() {
   match cmd(){
     Ok(_)    => return,
@@ -153,6 +162,7 @@ fn cmd() -> Result<(), error::Error> {
     Command::Store(sub)    => cmd_set(&opts, sub),
     Command::Delete(sub)   => cmd_delete(&opts, sub),
     Command::Shutdown(sub) => cmd_stop(&opts, sub),
+    Command::Cleanup(sub)  => cmd_cleanup(&opts, sub),
   }?;
 
   Ok(())
@@ -200,6 +210,17 @@ fn cmd_stop(opts: &Options, sub: &ShutdownOptions) -> Result<(), error::Error> {
   rpc.write_cmd(&rpc::Operation::new_shutdown())?;
   rpc.expect_cmd(&[rpc::CMD_OK])?;
 
+  Ok(())
+}
+
+fn cmd_cleanup(opts: &Options, sub: &CleanupOptions) -> Result<(), error::Error> {
+  let path = socket_path(&sub.path);
+  if opts.debug {
+    log::logln!("Deleting socket: {}", path.to_string_lossy())
+  }
+  if path.exists() {
+    fs::remove_file(&path)?;
+  }
   Ok(())
 }
 
