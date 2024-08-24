@@ -152,8 +152,8 @@ fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path
   };
   // this is the value at the specific path we're referencing
   let rval = match path {
-    Some(path) => path.value(&data),
-    None       => Some(&data),
+    Some(ref path) => path.value(&data),
+    None           => Some(&data),
   };
   log::logln!("AFFIRMATIVE: HERE: 3. {:?}", rval);
   let rval = match leaf {
