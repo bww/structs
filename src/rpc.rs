@@ -2,7 +2,6 @@ use std::io;
 use std::io::prelude::*;
 use std::fs;
 use std::path;
-use std::process;
 
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc;
@@ -10,15 +9,15 @@ use std::sync::mpsc;
 use crate::error;
 use crate::log;
 
-pub const CMD_SET:       &str = "set";
-pub const CMD_GET:       &str = "get";
-pub const CMD_RANGE:     &str = "range";
-pub const CMD_FOUND:     &str = "found";
-pub const CMD_NONE:      &str = "none";
-pub const CMD_DELETE:    &str = "delete";
-pub const CMD_SHUTDOWN:  &str = "stop";
-pub const CMD_OK:        &str = "ok";
-pub const CMD_ERROR:     &str = "err";
+pub const CMD_SET:      &str = "set";
+pub const CMD_GET:      &str = "get";
+pub const CMD_RANGE:    &str = "range";
+pub const CMD_FOUND:    &str = "found";
+pub const CMD_NONE:     &str = "none";
+pub const CMD_DELETE:   &str = "delete";
+pub const CMD_SHUTDOWN: &str = "stop";
+pub const CMD_OK:       &str = "ok";
+pub const CMD_ERROR:    &str = "err";
 
 #[derive(Debug)]
 pub struct Operation {
@@ -170,8 +169,8 @@ impl RPC {
 
     let mut line = String::new();
     let data = if match args[0] {
-      CMD_SET | CMD_FOUND => true,
-      _                   => false,
+      CMD_SET | CMD_FOUND| CMD_ERROR => true,
+      _                              => false,
     }{
       match self.reader.read_line(&mut line)? {
         0 => return Err(error::Error::Malformed),

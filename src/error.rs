@@ -24,6 +24,7 @@ pub enum Error {
   NotFound,
   _InvalidIndex,
   ServiceError,
+  RemoteError(Option<String>),
 }
 
 impl From<str::Utf8Error> for Error {
@@ -84,6 +85,10 @@ impl fmt::Display for Error {
       Self::NotFound => write!(f, "Not found"),
       Self::_InvalidIndex => write!(f, "Invalid index"),
       Self::ServiceError => write!(f, "Service error"),
+      Self::RemoteError(msg) => match msg {
+        Some(msg) => write!(f, "Remote error: {}", msg),
+        None      => write!(f, "Remote error"),
+      },
     }
   }
 }

@@ -129,22 +129,33 @@ fn fetch<'a>(store: &'a BTreeMap<String, serde_json::Value>, key: &str) -> Resul
 fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path: Option<jsonpath::Path>, val: serde_json::Value) -> Result<serde_json::Value, error::Error> {
   let path = match path {
     Some(path) => path,
-    None       => return Ok(store.insert(key.to_string(), val.clone()).unwrap()),
+    None       => {
+      store.insert(key.to_string(), val.clone());
+      return Ok(val);
+    },
   };
-  log::logln!("AFFIRMATIVE: HERE: {} / {:?}", path, path.trim(1));
-  // split into the path to the leaf node we're referencing and the leaf identifier
-  let (path, leaf) = match path.trim(1) {
-    (Some(p), Some(l)) => (p, Some(l)),
-    (Some(p), None)    => (p, None),
-    _                  => return Err(error::Error::Malformed),
-  };
+  log::logln!("AFFIRMATIVE: HERE: 1. {} / {:?}", path, path.trim(1));
+  // Split into the path to the leaf node we're referencing and the leaf identifier;
+  // we trim off the last component, because we need to identify the container that
+  // we're updating the value in and the name of the property or index we're updating
+  // that value in the container.
+  //
+  // For example, if we are updating: a.b.c, we need to lookup the container value in
+  // a.b and updateit's property named c. If we are attempting to update the first
+  // component, we are operating on the root container.
+  let (path, leaf) = path.trim(1);
+  log::logln!("AFFIRMATIVE: HERE: 2. {:?}", path);
   // this is the structure we're referencing into; we create a copy which we'll mutate
   let data = match store.get(key) {
     Some(data) => data.clone(),
     None       => return Err(error::Error::NotFound),
   };
   // this is the value at the specific path we're referencing
-  let rval = path.value(&data);
+  let rval = match path {
+    Some(path) => path.value(&data),
+    None       => Some(&data),
+  };
+  log::logln!("AFFIRMATIVE: HERE: 3. {:?}", rval);
   let rval = match leaf {
     Some(leaf) => {
       let mut base = match rval {
@@ -165,7 +176,7 @@ fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path
     },
     None => return Err(error::Error::NotFound),
   };
-  println!(">>> UPDATE: {} -> {}", path, rval);
+  println!(">>> UPDATE: {:?} -> {}", &path, rval);
   // persist a copy in the store, return the updated value
   store.insert(key.to_owned(), rval.clone());
   Ok(rval)
@@ -235,12 +246,15 @@ fn run_set(opts: &Options, store: &mut BTreeMap<String, serde_json::Value>, mut 
   if opts.debug {
     log::logln!("... {:?}", path.next());
   }
-  let _ = match path.next() {
-    (Some(key), Some(path)) => write(store, key, Some(jsonpath::Path::new(path)), data)?,
-    (Some(key), None)       => write(store, key, None, data)?,
-    _                       => return Err(error::Error::Malformed),
+  let res = match path.next() {
+    (Some(key), Some(path)) => write(store, key, Some(jsonpath::Path::new(path)), data),
+    (Some(key), None)       => write(store, key, None, data),
+    _                       => Err(error::Error::Malformed),
   };
-  req.send(rpc::Operation::new_ok())?;
+  match res {
+    Ok(_)    =>  req.send(rpc::Operation::new_ok())?,
+    Err(err) =>  req.send(rpc::Operation::new_error(&err.to_string()))?,
+  }
   Ok(())
 }
 

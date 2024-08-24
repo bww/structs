@@ -302,10 +302,12 @@ fn cmd_set(opts: &Options, sub: &StoreOptions) -> Result<(), error::Error> {
 
   // re-encode the value to ensure there is no extraneous whitespace
   rpc.write_cmd(&rpc::Operation::new_set(&key, &value.to_string()))?;
-  rpc.expect_cmd(&[rpc::CMD_OK])?;
-
-  println!("{}", key);
-  Ok(())
+  let rsp = rpc.expect_cmd(&[rpc::CMD_OK, rpc::CMD_ERROR])?;
+  match rsp.name() {
+    rpc::CMD_OK    => Ok(println!("{}", key)),
+    rpc::CMD_ERROR => Err(error::Error::RemoteError(rsp.data().clone())),
+    _              => Err(error::Error::Unexpected),
+  }
 }
 
 fn cmd_delete(opts: &Options, sub: &DeleteOptions) -> Result<(), error::Error> {
