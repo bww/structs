@@ -76,7 +76,18 @@ impl Path {
     }
   }
 
-  pub fn trim<'a>(&'a self, c: usize) -> (Option<Path>, Option<&'a str>) {
+  pub fn last<'a>(&'a self) -> (Option<Path>, Option<&'a str>) {
+    let p: &str = &self.0.trim();
+    if p == "" {
+      return (None, None); // empty string has no components
+    }
+    match p.rfind(SEP) {
+      Some(x) => (Some(Path::new(&p[..x])), Some(&p[x+1..])),
+      None    => (None, Some(p)), // if there is no separator, the entire path is the last component
+    }
+  }
+
+  pub fn _trim<'a>(&'a self, c: usize) -> (Option<Path>, Option<&'a str>) {
     let mut p: &str = &self.0;
     let mut n: Option<&str> = None;
     for _ in 0..c {
@@ -154,17 +165,29 @@ mod tests {
   #[test]
   fn trim_path() {
     let p = Path::new("a");
-    assert_eq!((Some(Path::new("a")), None), p.trim(0));
+    assert_eq!((Some(Path::new("a")), None), p._trim(0));
     let p = Path::new("a.b");
-    assert_eq!((Some(Path::new("a")), Some("b")), p.trim(1));
+    assert_eq!((Some(Path::new("a")), Some("b")), p._trim(1));
     let p = Path::new("a.b.c");
-    assert_eq!((Some(Path::new("a.b")), Some("c")), p.trim(1));
+    assert_eq!((Some(Path::new("a.b")), Some("c")), p._trim(1));
     let p = Path::new("a.b.c");
-    assert_eq!((Some(Path::new("a")), Some("b")), p.trim(2));
+    assert_eq!((Some(Path::new("a")), Some("b")), p._trim(2));
     let p = Path::new("a.b.c");
-    assert_eq!((None, None), p.trim(3));
+    assert_eq!((None, None), p._trim(3));
     let p = Path::new("a.b.c");
-    assert_eq!((None, None), p.trim(100));
+    assert_eq!((None, None), p._trim(100));
+  }
+
+  #[test]
+  fn last_path() {
+    let p = Path::new("a");
+    assert_eq!((None, Some("a")), p.last());
+    let p = Path::new("a.b");
+    assert_eq!((Some(Path::new("a")), Some("b")), p.last());
+    let p = Path::new("a.b.c");
+    assert_eq!((Some(Path::new("a.b")), Some("c")), p.last());
+    let p = Path::new("");
+    assert_eq!((None, None), p.last());
   }
 
   #[test]

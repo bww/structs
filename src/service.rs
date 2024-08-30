@@ -134,7 +134,7 @@ fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path
       return Ok(val);
     },
   };
-  log::logln!("AFFIRMATIVE: HERE: 1. {} / {:?}", path, path.trim(1));
+  log::logln!("AFFIRMATIVE: HERE: 1. {} / {:?}", path, path.last());
   // Split into the path to the leaf node we're referencing and the leaf identifier;
   // we trim off the last component, because we need to identify the container that
   // we're updating the value in and the name of the property or index we're updating
@@ -143,7 +143,7 @@ fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path
   // For example, if we are updating: a.b.c, we need to lookup the container value in
   // a.b and updateit's property named c. If we are attempting to update the first
   // component, we are operating on the root container.
-  let (path, leaf) = path.trim(1);
+  let (path, leaf) = path.last();
   log::logln!("AFFIRMATIVE: HERE: 2. {:?}", path);
   // this is the structure we're referencing into; we create a copy which we'll mutate
   let data = match store.get(key) {
@@ -155,7 +155,7 @@ fn write<'a>(store: &'a mut BTreeMap<String, serde_json::Value>, key: &str, path
     Some(ref path) => path.value(&data),
     None           => Some(&data),
   };
-  log::logln!("AFFIRMATIVE: HERE: 3. {:?}", rval);
+  log::logln!("AFFIRMATIVE: HERE: 3. {:?} -> {:?}", rval, leaf);
   let rval = match leaf {
     Some(leaf) => {
       let mut base = match rval {
