@@ -3,6 +3,8 @@ use std::fmt;
 use serde_json;
 use serde_json::value::Value;
 
+use crate::error;
+
 const SEP: &str = ".";
 
 #[derive(Debug, Clone, PartialEq)]
@@ -22,6 +24,37 @@ impl Path {
       (Some(v), None) => Some(v),
       _               => None,
     }
+  }
+
+  pub fn set_value<'a>(&self, current: &'a Value, update: &'a Value) -> Result<Value, error::Error> {
+    self.set_value_cmp(current, update)
+  }
+
+  fn set_value_cmp<'a>(&self, current: &'a Value, update: &'a Value) -> Result<Value, error::Error> {
+    let (left, path) = self.first();
+    let left = match left {
+      Some(left) => Path::new(left),
+      None       => return Err(error::Error::NotFound),
+    };
+    let mut lval = match left.value(current) {
+      Some(current) => match path {
+        Some(path) => path.set_value_cmp(current, update)?,
+        None       => current.clone(),
+      },
+      None       => return Err(error::Error::NotFound),
+    };
+    eprintln!(">>> >>> >>> {:?}");
+    match &mut lval {
+      serde_json::Value::Object(v) => {
+        v.insert(left.to_string(), update.clone());
+      },
+      serde_json::Value::Array(v) => match index_array(v, &left.to_string()) {
+        Some(i) => v[i] = update.clone(),
+        None    => return Err(error::Error::Malformed),
+      },
+      _ => return Err(error::Error::Malformed), // other types cannot be updated
+    }
+    Ok(lval)
   }
 
   pub fn find<'a>(&self, value: &'a Value) -> (Option<&'a Value>, Option<Path>) {
@@ -73,6 +106,17 @@ impl Path {
       } else {
         None
       }, None),
+    }
+  }
+
+  pub fn first<'a>(&'a self) -> (Option<&'a str>, Option<Path>) {
+    let p: &str = &self.0.trim();
+    if p == "" {
+      return (None, None); // empty string has no components
+    }
+    match p.find(SEP) {
+      Some(x) => (Some(&p[..x]), Some(Path::new(&p[x+1..]))),
+      None    => (Some(p), None), // if there is no separator, the entire path is the first component
     }
   }
 
@@ -176,6 +220,18 @@ mod tests {
     assert_eq!((None, None), p._trim(3));
     let p = Path::new("a.b.c");
     assert_eq!((None, None), p._trim(100));
+  }
+
+  #[test]
+  fn first_path() {
+    let p = Path::new("a");
+    assert_eq!((Some("a"), None), p.first());
+    let p = Path::new("a.b");
+    assert_eq!((Some("a"), Some(Path::new("b"))), p.first());
+    let p = Path::new("a.b.c");
+    assert_eq!((Some("a"), Some(Path::new("b.c"))), p.first());
+    let p = Path::new("");
+    assert_eq!((None, None), p.first());
   }
 
   #[test]
