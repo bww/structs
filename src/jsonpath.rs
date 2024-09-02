@@ -36,7 +36,6 @@ impl Path {
       Some(left) => Path::new(left),
       None       => return Err(error::Error::NotFound),
     };
-    eprintln!(">>> ... >>> {:?}.{:?} -> {:?}", &left, &path, current);
     let update = match left.value(current) {
       Some(lval) => match &path {
         Some(path) => &path.set_value_cmp(lval, update)?, // recurse
@@ -44,7 +43,6 @@ impl Path {
       },
       None => return Err(error::Error::NotFound),
     };
-    eprintln!(">>> >>> >>> {:?}.{:?} -> {:?} of {:?}", &left, &path, update, current);
     let mut current = current.clone();
     match &mut current {
       serde_json::Value::Object(v) => {
@@ -55,11 +53,9 @@ impl Path {
         None    => return Err(error::Error::NotFound),
       },
       _ => { // other types cannot be updated
-        eprintln!("Cannot convert to object or array: {:?}", update);
         return Err(error::Error::Malformed);
       },
     }
-    eprintln!("<<< <<< <<< {:?}.{:?} -> {:?}", &left, &path, &current);
     Ok(current)
   }
 
