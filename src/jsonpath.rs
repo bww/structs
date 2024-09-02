@@ -36,25 +36,31 @@ impl Path {
       Some(left) => Path::new(left),
       None       => return Err(error::Error::NotFound),
     };
-    let mut lval = match left.value(current) {
-      Some(current) => match path {
-        Some(path) => path.set_value_cmp(current, update)?,
-        None       => current.clone(),
+    eprintln!(">>> ... >>> {:?}.{:?} -> {:?}", &left, &path, current);
+    let update = match left.value(current) {
+      Some(lval) => match &path {
+        Some(path) => &path.set_value_cmp(lval, update)?, // recurse
+        None       => update,                    // update in our container
       },
-      None       => return Err(error::Error::NotFound),
+      None => return Err(error::Error::NotFound),
     };
-    eprintln!(">>> >>> >>> {:?}");
-    match &mut lval {
+    eprintln!(">>> >>> >>> {:?}.{:?} -> {:?} of {:?}", &left, &path, update, current);
+    let mut current = current.clone();
+    match &mut current {
       serde_json::Value::Object(v) => {
         v.insert(left.to_string(), update.clone());
       },
       serde_json::Value::Array(v) => match index_array(v, &left.to_string()) {
         Some(i) => v[i] = update.clone(),
-        None    => return Err(error::Error::Malformed),
+        None    => return Err(error::Error::NotFound),
       },
-      _ => return Err(error::Error::Malformed), // other types cannot be updated
+      _ => { // other types cannot be updated
+        eprintln!("Cannot convert to object or array: {:?}", update);
+        return Err(error::Error::Malformed);
+      },
     }
-    Ok(lval)
+    eprintln!("<<< <<< <<< {:?}.{:?} -> {:?}", &left, &path, &current);
+    Ok(current)
   }
 
   pub fn find<'a>(&self, value: &'a Value) -> (Option<&'a Value>, Option<Path>) {
