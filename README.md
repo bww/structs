@@ -1,7 +1,7 @@
 ## Structs, the data structure service
 _Structs_ is a tool for interacting with structured data in shell scripts. Structs allows you to parse some JSON, maintain the data structure in memory, and arbitrarily access fields in a natural way. There are other ways to accomplish this in shell scripts, but they are generally not great.
 
-We do this by running a small service in the background which is automatically started in response to the first Structs command. Subsequent comands will use the same service, and therefore can access the same data. This service automatically exits after there is no more activity for a while—usually a minut for a while—usually a minute.
+We do this by running a small service in the background which is automatically started in response to the first Structs command. Subsequent comands will use the same service, and therefore can access the same data. This service automatically exits after there is no activity for a while—usually a minute.
 
 ### Define a data structure
 A data structure can be defined via the `set` operation. The key for the newly-created structure is printed and can be used to fetch data.
