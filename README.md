@@ -1,5 +1,7 @@
 ## Structs, the data structure service
-_Structs_ is a tool for interacting with structured data in shell scripts. Structs allows you to parse some JSON, maintain the data structure in memory, and arbitrarily access fields in a natural way. There are other ways to accomplish this in shell scripts, but they are mostly pretty clunky.
+_Structs_ is a tool for interacting with structured data in shell scripts. Structs allows you to parse some JSON, maintain the data structure in memory, and arbitrarily access fields in a natural way. There are other ways to accomplish this in shell scripts, but they are generally not great.
+
+We do this by running a small service in the background which is automatically started in response to the first Structs command. Subsequent comands will use the same service, and therefore can access the same data. This service automatically exits after there is no more activity for a while—usually a minut for a while—usually a minute.
 
 ### Define a data structure
 A data structure can be defined via the `set` operation. The key for the newly-created structure is printed and can be used to fetch data.
@@ -59,6 +61,18 @@ $ structs get --raw woh7iu3tieB0.numbers.two.ordinal
 2nd
 ```
 
+### Update a data structure
+We can update part of the data structure by using the `set` operation with a path to the field we are changing. (We can also replace the entire data structure by updateing the root key.)
+```sh
+$ structs get woh7iu3tieB0.numbers.two
+{
+  "cardinal": 2,
+  "ordinal": "second"
+}
+^D
+woh7iu3tieB0.numbers.two
+```
+
 ### Range over keys (or indexes)
 Range over and print all the keys (or indexes) in an object or array. The keys or indexes are printed in raw form, suitable for use as a component in an expression.
 ```sh
@@ -72,4 +86,3 @@ Ordinal: 1st
 Ordinal: 2nd
 Ordinal: 3rd
 ```
-
