@@ -1,6 +1,6 @@
 [package]
 name = "structs-sh"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 description = "A local data structure service"
 repository = "https://github.com/bww/structs"
@@ -12,10 +12,10 @@ name = "structs"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version="3.1", features=["derive"] }
+clap = { version = "3.1", features = ["derive"] }
 colored = "2.0.0"
 nom = "7.1.3"
-serde = { version="1.0", features=["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8.5"
 ctrlc = "3.4.0"
